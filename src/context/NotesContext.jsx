@@ -101,20 +101,90 @@ export function NotesProvider({ children }) {
         const sentences = noteToProcess.content.split('.').filter(Boolean).map(s => s.trim() + '.')
         const summary = 'Local fallback generated because Gemini quota was unavailable.\n\n' + sentences.slice(0, 3).join(' ')
         
-        const words = Array.from(new Set(noteToProcess.content.split(/\s+/).filter(w => w.length > 5))).slice(0, 10)
+        // Extract words with length > 5, remove punctuation to keep clean keywords
+        const allWords = noteToProcess.content.split(/\s+/).map(w => w.replace(/[^a-zA-Z0-9]/g, '')).filter(w => w.length > 5);
+        const uniqueWords = Array.from(new Set(allWords));
+        const words = uniqueWords.slice(0, 20); // Get up to 20 keywords for variety
         
-        const quizQuestions = Array.from({ length: 5 }).map((_, i) => ({
-          id: `fallback-q-${i}`,
-          question: `What is the significance of "${words[i] || 'this concept'}" in the context of these notes?`,
-          options: ['Option A (Correct)', 'Option B', 'Option C', 'Option D'],
-          correctIndex: 0
-        }))
+        const quizQuestions = Array.from({ length: 5 }).map((_, i) => {
+          const answer = words[i % words.length] || 'Concept';
+          const otherWords = words.filter(w => w !== answer).sort(() => Math.random() - 0.5);
+          
+          const options = [answer];
+          // Fill up to 4 options
+          for (let j = 0; options.length < 4; j++) {
+            if (otherWords[j] && !options.includes(otherWords[j])) {
+              options.push(otherWords[j]);
+            } else {
+              options.push(`Alternative ${options.length}`);
+            }
+          }
+          options.sort(() => Math.random() - 0.5); // Shuffle options
+          
+          return {
+            id: `fallback-q-${i}`,
+            question: `Which of the following terms is strongly associated with the concept of "${words[(i+1)%words.length] || 'this topic'}" in your notes?`,
+            options: options,
+            correctAnswer: answer
+          };
+        });
         
-        const flashcards = Array.from({ length: 5 }).map((_, i) => ({
+        // Improved Flashcard generation logic
+        const defPatterns = [
+          { regex: /^(.*?)\s+(is defined as|refers to|means)\s+(.*)$/i, termIdx: 1, defIdx: 3 },
+          { regex: /^(.*?)\s+(is|are)\s+(a|an|the)\s+(.*)$/i, termIdx: 1, defIdx: 4 },
+        ];
+        
+        let extractedDefinitions = [];
+        for (const s of sentences) {
+          const cleanSentence = s.trim();
+          if (cleanSentence.length < 15 || cleanSentence.length > 150) continue;
+          
+          for (const pattern of defPatterns) {
+            const match = cleanSentence.match(pattern.regex);
+            if (match && match[pattern.termIdx].split(' ').length <= 4) {
+              extractedDefinitions.push({
+                front: `Define: ${match[pattern.termIdx].trim()}`,
+                back: match[pattern.defIdx].trim().replace(/\.$/, '')
+              });
+              break;
+            }
+          }
+        }
+        
+        // If not enough definitions, extract key sentences with keywords
+        let remainingCards = 5 - extractedDefinitions.length;
+        if (remainingCards > 0) {
+          const fallbackSentences = sentences
+            .filter(s => s.length > 20 && s.length < 150 && !extractedDefinitions.some(d => s.includes(d.back)))
+            .sort(() => Math.random() - 0.5);
+            
+          for (let i = 0; i < remainingCards && i < fallbackSentences.length; i++) {
+            const s = fallbackSentences[i];
+            const sentenceWords = s.split(/\s+/);
+            const keyWord = sentenceWords.find(w => w.length > 5) || sentenceWords[Math.floor(sentenceWords.length / 2)];
+            
+            extractedDefinitions.push({
+              front: `Fill in the blank: ${s.replace(keyWord, '______')}`,
+              back: keyWord.replace(/[^a-zA-Z0-9]/g, '')
+            });
+          }
+        }
+        
+        // Ensure exactly 5 flashcards
+        while(extractedDefinitions.length < 5) {
+           const fallbackWord = words[extractedDefinitions.length % words.length] || `Concept ${extractedDefinitions.length + 1}`;
+           extractedDefinitions.push({
+             front: `What is ${fallbackWord}?`,
+             back: `Refer to your notes to review the concept of ${fallbackWord}.`
+           });
+        }
+        
+        const flashcards = extractedDefinitions.slice(0, 5).map((d, i) => ({
           id: `fallback-f-${i}`,
-          front: words[i + 5] || `Key Term ${i + 1}`,
-          back: `Definition of ${words[i + 5] || `Key Term ${i + 1}`} based on the context of your notes.`
-        }))
+          front: d.front,
+          back: d.back
+        }));
         
         const patch = { summary, quizQuestions, flashcards, updatedAt: new Date().toISOString() }
         setNotes((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))

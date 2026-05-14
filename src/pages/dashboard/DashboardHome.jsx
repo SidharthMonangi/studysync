@@ -24,6 +24,7 @@ import { todayISO, formatDueLine, formatTimeShort } from '@/lib/dates'
 import { EmptyState } from '@/components/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { cn } from '@/lib/utils'
+import { AIInsights, WeeklyHeatmap, ActivityFeed } from '@/components/dashboard/DashboardWidgets'
 
 function streakFromSessions(sessions) {
   const days = new Set((sessions || []).map((s) => (s.completedAt || '').slice(0, 10)))
@@ -162,8 +163,14 @@ export default function DashboardHome() {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="space-y-6 lg:col-span-1">
+          <AIInsights tasks={tasks} notes={notes} pomodoroSessions={pomodoroSessions} analytics={analytics} streak={streak} />
+          <WeeklyHeatmap tasks={tasks} notes={notes} pomodoroSessions={pomodoroSessions} />
+          <ActivityFeed tasks={tasks} notes={notes} pomodoroSessions={pomodoroSessions} plans={plans} />
+        </div>
+
+        <div className="lg:col-span-1 xl:col-span-2 space-y-6">
           <div className="glass-card rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-foreground">Upcoming tasks</h2>

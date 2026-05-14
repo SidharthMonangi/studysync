@@ -14,6 +14,7 @@ import {
   Trash2,
   HelpCircle,
   Repeat,
+  ChevronLeft,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,7 +37,9 @@ export default function NotesPage() {
   const [newNote, setNewNote] = useState({ title: '', subject: 'General', content: '' })
   const [copied, setCopied] = useState(false)
   const [quizReveal, setQuizReveal] = useState({})
-  const [flashcardFlipped, setFlashcardFlipped] = useState({})
+  const [quizSelections, setQuizSelections] = useState({})
+  const [flashcardFlipped, setFlashcardFlipped] = useState(false)
+  const [currentFlashcardIndex, setCurrentFlashcardIndex] = useState(0)
   const [explainerTerm, setExplainerTerm] = useState('')
   const [explanation, setExplanation] = useState('')
   const [isExplaining, setIsExplaining] = useState(false)
@@ -44,11 +47,12 @@ export default function NotesPage() {
   const selectedNote = useMemo(() => notes.find((n) => n.id === selectedId) ?? null, [notes, selectedId])
 
   useEffect(() => {
-    // Reset state when note changes
     setExplanation('')
     setExplainerTerm('')
-    setFlashcardFlipped({})
+    setFlashcardFlipped(false)
+    setCurrentFlashcardIndex(0)
     setQuizReveal({})
+    setQuizSelections({})
   }, [selectedId])
 
   useEffect(() => {
@@ -142,8 +146,28 @@ export default function NotesPage() {
     toast.success('Note deleted')
   }
 
-  const toggleQuiz = (qid) => {
-    setQuizReveal((prev) => ({ ...prev, [qid]: !prev[qid] }))
+  const handleSelectOption = (qid, option) => {
+    if (quizSelections[qid]) return;
+    setQuizSelections((prev) => ({ ...prev, [qid]: option }))
+  }
+
+  const handleResetQuiz = () => {
+    setQuizSelections({})
+    setQuizReveal({})
+  }
+
+  const handleNextFlashcard = () => {
+    if (selectedNote?.flashcards && currentFlashcardIndex < selectedNote.flashcards.length - 1) {
+      setFlashcardFlipped(false)
+      setCurrentFlashcardIndex(prev => prev + 1)
+    }
+  }
+
+  const handlePrevFlashcard = () => {
+    if (currentFlashcardIndex > 0) {
+      setFlashcardFlipped(false)
+      setCurrentFlashcardIndex(prev => prev - 1)
+    }
   }
 
   return (
@@ -318,43 +342,73 @@ export default function NotesPage() {
                       <div className="p-4 rounded-xl bg-secondary/30 border border-border flex flex-col">
                         <div className="flex items-center justify-between mb-3">
                           <span className="font-medium text-foreground">Practice Quiz</span>
-                          <Button type="button" variant="outline" size="sm" onClick={runIntel} disabled={isGenerating} className="glass-button">
-                            Regenerate
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={handleResetQuiz} className="glass-button">
+                              Reset
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={runIntel} disabled={isGenerating} className="glass-button">
+                              Regenerate
+                            </Button>
+                          </div>
                         </div>
                         {!selectedNote.quizQuestions || selectedNote.quizQuestions.length === 0 ? (
                           <p className="text-sm text-muted-foreground">No quiz available.</p>
                         ) : (
                           <ul className="space-y-4 overflow-y-auto pr-2" style={{ maxHeight: '400px' }}>
-                            {selectedNote.quizQuestions.map((q, idx) => (
-                              <li key={q.id || idx} className="rounded-lg border border-border/80 p-3 bg-background/40">
-                                <p className="text-sm text-foreground font-medium mb-2">
-                                  {idx + 1}. {q.question}
-                                </p>
-                                <ul className="space-y-1 mb-2">
-                                  {q.options.map((opt, oi) => (
-                                    <li key={oi} className="text-xs text-muted-foreground pl-2">
-                                      {String.fromCharCode(65 + oi)}. {opt}
-                                    </li>
-                                  ))}
-                                </ul>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-primary h-auto p-0"
-                                  onClick={() => setQuizReveal((prev) => ({ ...prev, [q.id || idx]: !prev[q.id || idx] }))}
-                                >
-                                  {quizReveal[q.id || idx] ? 'Hide answer' : 'Show answer'}
-                                </Button>
-                                {quizReveal[q.id || idx] && (
-                                  <p className="text-xs text-primary mt-2">
-                                    Correct: {String.fromCharCode(65 + (q.correctIndex ?? 0))}.{' '}
-                                    {q.options[q.correctIndex]}
+                            {selectedNote.quizQuestions.map((q, idx) => {
+                              const qid = q.id || idx;
+                              const isRevealed = quizReveal[qid];
+                              const selectedOpt = quizSelections[qid];
+                              const showResult = isRevealed || selectedOpt;
+                              
+                              return (
+                                <li key={qid} className="rounded-lg border border-border/80 p-3 bg-background/40">
+                                  <p className="text-sm text-foreground font-medium mb-3">
+                                    {idx + 1}. {q.question}
                                   </p>
-                                )}
-                              </li>
-                            ))}
+                                  <ul className="space-y-2 mb-3">
+                                    {q.options.map((opt, oi) => {
+                                      const isSelected = selectedOpt === opt;
+                                      const isCorrect = q.correctAnswer !== undefined ? (opt === q.correctAnswer) : (oi === q.correctIndex);
+                                      
+                                      let styleClass = "border-border/80 hover:bg-secondary/50 cursor-pointer text-muted-foreground";
+                                      if (showResult) {
+                                        if (isCorrect) {
+                                          styleClass = "bg-green-500/20 border-green-500/50 text-green-700 dark:text-green-400 font-medium";
+                                        } else if (isSelected) {
+                                          styleClass = "bg-red-500/20 border-red-500/50 text-red-700 dark:text-red-400 font-medium";
+                                        } else {
+                                          styleClass = "border-border/40 opacity-50 cursor-not-allowed";
+                                        }
+                                      } else if (isSelected) {
+                                        styleClass = "bg-primary/20 border-primary/50 text-primary";
+                                      }
+  
+                                      return (
+                                        <li 
+                                          key={oi} 
+                                          onClick={() => { if (!showResult) handleSelectOption(qid, opt) }}
+                                          className={cn("text-xs p-2.5 rounded-lg border transition-colors", styleClass)}
+                                        >
+                                          {String.fromCharCode(65 + oi)}. {opt}
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                  {!showResult && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-primary h-auto p-0"
+                                      onClick={() => setQuizReveal((prev) => ({ ...prev, [qid]: true }))}
+                                    >
+                                      Show answer
+                                    </Button>
+                                  )}
+                                </li>
+                              )
+                            })}
                           </ul>
                         )}
                       </div>
@@ -367,32 +421,55 @@ export default function NotesPage() {
                         {!selectedNote.flashcards || selectedNote.flashcards.length === 0 ? (
                           <p className="text-sm text-muted-foreground">No flashcards available.</p>
                         ) : (
-                          <ul className="space-y-4 overflow-y-auto pr-2" style={{ maxHeight: '400px' }}>
-                            {selectedNote.flashcards.map((f, idx) => (
-                              <li key={f.id || idx} className="rounded-lg border border-border/80 p-3 bg-background/40">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Card {idx + 1}</span>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-primary h-auto p-0"
-                                    onClick={() => setFlashcardFlipped((prev) => ({ ...prev, [f.id || idx]: !prev[f.id || idx] }))}
-                                  >
-                                    <Repeat className="w-3 h-3 mr-1" />
-                                    Flip
-                                  </Button>
-                                </div>
-                                <div className="p-3 bg-secondary/50 rounded-lg min-h-[80px] flex items-center justify-center text-center transition-all duration-300">
-                                  {flashcardFlipped[f.id || idx] ? (
-                                    <p className="text-sm text-foreground">{f.back}</p>
-                                  ) : (
-                                    <p className="text-sm font-medium text-foreground">{f.front}</p>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                          <div className="flex flex-col items-center">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                              Card {currentFlashcardIndex + 1} of {selectedNote.flashcards.length}
+                            </span>
+                            
+                            <div className="w-full relative">
+                              <div className="rounded-lg border border-border/80 p-5 bg-background/40 min-h-[160px] flex flex-col items-center justify-center text-center transition-all duration-300">
+                                {flashcardFlipped ? (
+                                  <p className="text-sm text-foreground leading-relaxed">{selectedNote.flashcards[currentFlashcardIndex].back}</p>
+                                ) : (
+                                  <p className="text-lg font-medium text-foreground leading-relaxed">{selectedNote.flashcards[currentFlashcardIndex].front}</p>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-between w-full mt-4 px-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="glass-button w-10 h-10 p-0"
+                                onClick={handlePrevFlashcard}
+                                disabled={currentFlashcardIndex === 0}
+                              >
+                                <ChevronLeft className="w-4 h-4" />
+                              </Button>
+                              
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="glass-button px-6"
+                                onClick={() => setFlashcardFlipped(!flashcardFlipped)}
+                              >
+                                <Repeat className="w-4 h-4 mr-2" />
+                                Flip Card
+                              </Button>
+                              
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="glass-button w-10 h-10 p-0"
+                                onClick={handleNextFlashcard}
+                                disabled={currentFlashcardIndex === selectedNote.flashcards.length - 1}
+                              >
+                                <ChevronRight className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>

@@ -95,7 +95,7 @@ Respond ONLY with a valid JSON object strictly matching this schema:
       "id": "q1",
       "question": "String",
       "options": ["A", "B", "C", "D"],
-      "correctIndex": Number (0-3)
+      "correctAnswer": "Exact string of the correct option"
     }
   ],
   "flashcards": [
