@@ -148,7 +148,7 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
         {stats.map((stat) => (
           <div key={stat.label} className="glass-card rounded-2xl p-4 lg:p-5 hover:border-primary/30 transition-smooth">
             <div className="flex items-center justify-between mb-3">
@@ -163,14 +163,14 @@ export default function DashboardHome() {
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        <div className="space-y-6 lg:col-span-1">
+      <div className="grid lg:grid-cols-3 xl:grid-cols-4 gap-5 lg:gap-6">
+        <div className="space-y-5 lg:col-span-1">
           <AIInsights tasks={tasks} notes={notes} pomodoroSessions={pomodoroSessions} analytics={analytics} streak={streak} />
           <WeeklyHeatmap tasks={tasks} notes={notes} pomodoroSessions={pomodoroSessions} />
           <ActivityFeed tasks={tasks} notes={notes} pomodoroSessions={pomodoroSessions} plans={plans} />
         </div>
 
-        <div className="lg:col-span-1 xl:col-span-2 space-y-6">
+        <div className="lg:col-span-1 xl:col-span-2 space-y-5">
           <div className="glass-card rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-foreground">Upcoming tasks</h2>
@@ -288,7 +288,7 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-5 lg:col-span-1">
           <div className="glass-card rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-foreground">Today&apos;s plan</h2>

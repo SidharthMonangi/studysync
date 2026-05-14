@@ -251,7 +251,7 @@ export function DashboardShell({ children }) {
           </div>
         </header>
 
-        <div className="p-4 lg:p-6">{children}</div>
+        <div className="p-4 lg:p-8 max-w-[1400px] mx-auto w-full">{children}</div>
       </main>
     </div>
   )
