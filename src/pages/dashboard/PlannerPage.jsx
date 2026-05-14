@@ -157,7 +157,32 @@ export default function PlannerPage() {
       
       toast.success('Generated AI study plan!')
     } catch (err) {
-      toast.error(err.message || 'Failed to generate study plan.')
+      if (err.name === 'GeminiQuotaError') {
+        let currentHour = 9
+        let currentMinute = 0
+        
+        for (const task of openTasks) {
+          const startTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`
+          
+          await addPlan({
+            subject: task.subject || 'General',
+            topic: task.title || 'Study Session',
+            date: todayISO(),
+            startTime: startTime,
+            durationMinutes: 25,
+            status: 'planned'
+          })
+          
+          currentMinute += 25
+          if (currentMinute >= 60) {
+            currentHour += Math.floor(currentMinute / 60)
+            currentMinute = currentMinute % 60
+          }
+        }
+        toast.warning('Gemini quota reached. Showing local fallback materials.')
+      } else {
+        toast.error(err.message || 'Failed to generate study plan.')
+      }
     } finally {
       setIsGeneratingPlan(false)
     }

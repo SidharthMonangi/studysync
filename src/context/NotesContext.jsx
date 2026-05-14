@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { useAuth } from './AuthContext'
-import { generateNoteIntel as runGeminiIntel } from '@/lib/gemini'
+import { generateNoteIntel as runGeminiIntel, GeminiQuotaError } from '@/lib/gemini'
 
 const NotesContext = createContext(null)
 
@@ -94,7 +94,36 @@ export function NotesProvider({ children }) {
       
       const docRef = doc(db, 'users', userId, 'notes', id)
       await updateDoc(docRef, patch)
+      
+      return { isFallback: false }
     } catch (err) {
+      if (err.name === 'GeminiQuotaError') {
+        const sentences = noteToProcess.content.split('.').filter(Boolean).map(s => s.trim() + '.')
+        const summary = 'Local fallback generated because Gemini quota was unavailable.\n\n' + sentences.slice(0, 3).join(' ')
+        
+        const words = Array.from(new Set(noteToProcess.content.split(/\s+/).filter(w => w.length > 5))).slice(0, 10)
+        
+        const quizQuestions = Array.from({ length: 5 }).map((_, i) => ({
+          id: `fallback-q-${i}`,
+          question: `What is the significance of "${words[i] || 'this concept'}" in the context of these notes?`,
+          options: ['Option A (Correct)', 'Option B', 'Option C', 'Option D'],
+          correctIndex: 0
+        }))
+        
+        const flashcards = Array.from({ length: 5 }).map((_, i) => ({
+          id: `fallback-f-${i}`,
+          front: words[i + 5] || `Key Term ${i + 1}`,
+          back: `Definition of ${words[i + 5] || `Key Term ${i + 1}`} based on the context of your notes.`
+        }))
+        
+        const patch = { summary, quizQuestions, flashcards, updatedAt: new Date().toISOString() }
+        setNotes((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))
+        const docRef = doc(db, 'users', userId, 'notes', id)
+        await updateDoc(docRef, patch)
+        
+        return { isFallback: true }
+      }
+      
       console.error('Failed to generate note intel', err)
       throw err
     }

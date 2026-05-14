@@ -15,7 +15,7 @@ Unlike demo-only student dashboards, StudySync AI uses:
 
 - Firebase Authentication
 - Firestore cloud database
-- Real Gemini AI integration
+- Real Gemini AI integration with a robust local fallback system
 - Persistent cloud-synced data
 - Modern scalable React architecture
 
@@ -31,6 +31,7 @@ The project was designed as a production-style flagship portfolio application.
 - AI quiz generation
 - Concept explanation assistant
 - AI study planner using task prioritization
+- Robust local fallback system when Gemini API rate limits are reached
 
 ## Productivity Features
 - Task manager

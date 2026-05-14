@@ -71,8 +71,12 @@ export default function NotesPage() {
     if (!selectedNote) return
     setIsGenerating(true)
     try {
-      await generateNoteIntel(selectedNote.id)
-      toast.success('Generated AI study materials')
+      const result = await generateNoteIntel(selectedNote.id)
+      if (result?.isFallback) {
+        toast.warning('Gemini quota reached. Showing local fallback materials.')
+      } else {
+        toast.success('Generated AI study materials')
+      }
     } catch (err) {
       toast.error('Failed to generate study materials')
     } finally {
@@ -87,7 +91,12 @@ export default function NotesPage() {
       const text = await explainConcept(explainerTerm, selectedNote.content)
       setExplanation(text)
     } catch (err) {
-      toast.error('Failed to explain concept')
+      if (err.name === 'GeminiQuotaError') {
+        setExplanation(`Local fallback generated because Gemini quota was unavailable.\n\n"${explainerTerm}" is a key concept from your notes. Please review the relevant section in your notes for more details.`)
+        toast.warning('Gemini quota reached. Showing local fallback materials.')
+      } else {
+        toast.error('Failed to explain concept')
+      }
     } finally {
       setIsExplaining(false)
     }

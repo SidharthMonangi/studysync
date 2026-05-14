@@ -1,5 +1,12 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY
 
+export class GeminiQuotaError extends Error {
+  constructor(message = 'Gemini API rate limit reached. Please wait and try again.') {
+    super(message);
+    this.name = 'GeminiQuotaError';
+  }
+}
+
 async function callGemini(systemInstruction, prompt, isJson = false) {
   if (!GEMINI_API_KEY) {
     throw new Error('Missing Gemini API key in .env')
@@ -54,7 +61,7 @@ async function callGemini(systemInstruction, prompt, isJson = false) {
     }
 
     if (response.status === 429) {
-      throw new Error('Gemini API rate limit reached. Please wait and try again.')
+      throw new GeminiQuotaError()
     }
     
     throw new Error('Failed to generate AI response')
