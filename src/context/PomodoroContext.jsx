@@ -9,9 +9,10 @@ export function PomodoroProvider({ children }) {
   const { userId } = useAuth()
   const [pomodoroSessions, setPomodoroSessions] = useState([])
   const [pomodoroSettings, setPomodoroSettingsState] = useState({
-    focusTime: 25,
+    focus: 25,
     shortBreak: 5,
     longBreak: 15,
+    sessionsBeforeLongBreak: 4,
   })
   const [isLoading, setIsLoading] = useState(true)
 
@@ -39,12 +40,22 @@ export function PomodoroProvider({ children }) {
         sessions.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
         
         const defaultSettings = {
-          focusTime: 25,
+          focus: 25,
           shortBreak: 5,
           longBreak: 15,
+          sessionsBeforeLongBreak: 4,
         }
         
-        const settings = settingsSnap.exists() ? { ...defaultSettings, ...settingsSnap.data() } : defaultSettings
+        let settings = { ...defaultSettings }
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data()
+          settings = {
+            focus: Math.max(1, Number(data.focus) || defaultSettings.focus),
+            shortBreak: Math.max(1, Number(data.shortBreak) || defaultSettings.shortBreak),
+            longBreak: Math.max(1, Number(data.longBreak) || defaultSettings.longBreak),
+            sessionsBeforeLongBreak: Math.max(1, Number(data.sessionsBeforeLongBreak) || defaultSettings.sessionsBeforeLongBreak),
+          }
+        }
 
         if (mounted) {
           setPomodoroSessions(sessions)

@@ -24,7 +24,7 @@ export default function PomodoroPage() {
   const toast = useToast()
 
   const [mode, setMode] = useState('focus')
-  const [timeLeft, setTimeLeft] = useState(() => pomodoroSettings.focus * 60)
+  const [timeLeft, setTimeLeft] = useState(() => Math.max(1, Number(pomodoroSettings.focus) || 25) * 60)
   const [isRunning, setIsRunning] = useState(false)
   const [focusCycles, setFocusCycles] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
@@ -49,7 +49,7 @@ export default function PomodoroPage() {
   const switchMode = useCallback((newMode) => {
     setMode(newMode)
     const s = settingsRef.current
-    const len = newMode === 'focus' ? s.focus : newMode === 'shortBreak' ? s.shortBreak : s.longBreak
+    const len = Math.max(1, Number(newMode === 'focus' ? s.focus : newMode === 'shortBreak' ? s.shortBreak : s.longBreak) || 25)
     setTimeLeft(len * 60)
   }, [])
 
@@ -93,20 +93,17 @@ export default function PomodoroPage() {
     setSettingsDraft(pomodoroSettings)
     if (!isRunning) {
       const s = pomodoroSettings
-      const len = mode === 'focus' ? s.focus : mode === 'shortBreak' ? s.shortBreak : s.longBreak
+      const len = Math.max(1, Number(mode === 'focus' ? s.focus : mode === 'shortBreak' ? s.shortBreak : s.longBreak) || 25)
       setTimeLeft(len * 60)
     }
   }, [pomodoroSettings, isRunning, mode])
 
-  const totalTime =
-    (mode === 'focus'
-      ? pomodoroSettings.focus
-      : mode === 'shortBreak'
-        ? pomodoroSettings.shortBreak
-        : pomodoroSettings.longBreak) * 60
+  const currentDuration = Math.max(1, Number(mode === 'focus' ? pomodoroSettings.focus : mode === 'shortBreak' ? pomodoroSettings.shortBreak : pomodoroSettings.longBreak) || 25)
+  const totalTime = currentDuration * 60
   const progress = totalTime === 0 ? 0 : ((totalTime - timeLeft) / totalTime) * 100
 
   const formatTime = (seconds) => {
+    if (isNaN(seconds)) return "00:00"
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
@@ -116,7 +113,7 @@ export default function PomodoroPage() {
 
   const resetTimer = () => {
     const s = pomodoroSettings
-    const len = mode === 'focus' ? s.focus : mode === 'shortBreak' ? s.shortBreak : s.longBreak
+    const len = Math.max(1, Number(mode === 'focus' ? s.focus : mode === 'shortBreak' ? s.shortBreak : s.longBreak) || 25)
     setTimeLeft(len * 60)
     setIsRunning(false)
   }
@@ -135,15 +132,15 @@ export default function PomodoroPage() {
 
   const saveSettingsFromModal = () => {
     const next = {
-      focus: Math.min(60, Math.max(1, Number(settingsDraft.focus) || 25)),
-      shortBreak: Math.min(30, Math.max(1, Number(settingsDraft.shortBreak) || 5)),
-      longBreak: Math.min(45, Math.max(1, Number(settingsDraft.longBreak) || 15)),
+      focus: Math.min(120, Math.max(1, Number(settingsDraft.focus) || 25)),
+      shortBreak: Math.min(120, Math.max(1, Number(settingsDraft.shortBreak) || 5)),
+      longBreak: Math.min(120, Math.max(1, Number(settingsDraft.longBreak) || 15)),
       sessionsBeforeLongBreak: Math.min(8, Math.max(2, Number(settingsDraft.sessionsBeforeLongBreak) || 4)),
     }
     setPomodoroSettings(next)
     setShowSettings(false)
     setIsRunning(false)
-    const len = mode === 'focus' ? next.focus : mode === 'shortBreak' ? next.shortBreak : next.longBreak
+    const len = Math.max(1, Number(mode === 'focus' ? next.focus : mode === 'shortBreak' ? next.shortBreak : next.longBreak) || 25)
     setTimeLeft(len * 60)
     toast.success('Timer settings saved')
   }
@@ -237,27 +234,43 @@ export default function PomodoroPage() {
               </button>
             </div>
 
-            <div className="flex justify-center mb-8">
-              <div className="relative">
-                <svg className="w-64 h-64 lg:w-80 lg:h-80 transform -rotate-90">
-                  <circle cx="50%" cy="50%" r="45%" className="fill-none stroke-secondary" strokeWidth="8" />
+            <div className="flex justify-center mb-6">
+              <div className="relative group">
+                {/* Outer subtle glow */}
+                <div className={cn(
+                  "absolute inset-2 rounded-full blur-2xl opacity-20 transition-all duration-1000",
+                  mode === 'focus' ? 'bg-primary' : mode === 'shortBreak' ? 'bg-chart-2' : 'bg-chart-4'
+                )} />
+                <svg className="w-64 h-64 lg:w-80 lg:h-80 transform -rotate-90 drop-shadow-md relative z-10">
+                  <circle cx="50%" cy="50%" r="45%" className="fill-none stroke-secondary/50" strokeWidth="6" />
                   <circle
                     cx="50%"
                     cy="50%"
                     r="45%"
                     className={cn(
-                      'fill-none transition-all duration-1000',
+                      'fill-none transition-all duration-1000 ease-in-out',
                       mode === 'focus' ? 'stroke-primary' : mode === 'shortBreak' ? 'stroke-chart-2' : 'stroke-chart-4',
                     )}
                     strokeWidth="8"
                     strokeLinecap="round"
                     strokeDasharray={`${2 * Math.PI * 45}%`}
-                    strokeDashoffset={`${2 * Math.PI * 45 * (1 - progress / 100)}%`}
+                    strokeDashoffset={`${2 * Math.PI * 45 * (1 - Math.max(0, Math.min(100, progress)) / 100)}%`}
+                    style={{ filter: "drop-shadow(0 0 4px currentColor)" }}
                   />
                 </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-5xl lg:text-7xl font-bold text-foreground font-mono">{formatTime(timeLeft)}</span>
-                  <span className="text-muted-foreground mt-2 capitalize">{mode.replace('Break', ' break')}</span>
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+                  <span className="text-6xl lg:text-7xl font-bold text-foreground font-mono tracking-tighter drop-shadow-sm">{formatTime(timeLeft)}</span>
+                  <div className="mt-3 px-3 py-1 rounded-full bg-background/50 border border-border/50 backdrop-blur-sm flex flex-col items-center">
+                    <span className={cn(
+                      "text-xs font-semibold uppercase tracking-widest",
+                      mode === 'focus' ? 'text-primary' : mode === 'shortBreak' ? 'text-chart-2' : 'text-chart-4'
+                    )}>
+                      {mode.replace('Break', ' break')}
+                    </span>
+                    <span className="text-xs text-muted-foreground mt-0.5">
+                      {mode === 'focus' ? `Stay focused for ${currentDuration}m` : mode === 'shortBreak' ? `Short break in progress` : `Long break mode`}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -413,33 +426,33 @@ export default function PomodoroPage() {
                 <label className="block text-sm font-medium text-foreground mb-2">Focus: {settingsDraft.focus} min</label>
                 <input
                   type="range"
-                  min="15"
-                  max="60"
+                  min="1"
+                  max="120"
                   value={settingsDraft.focus}
                   onChange={(e) => setSettingsDraft({ ...settingsDraft, focus: parseInt(e.target.value, 10) })}
-                  className="w-full"
+                  className="w-full accent-primary"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Short break: {settingsDraft.shortBreak} min</label>
                 <input
                   type="range"
-                  min="3"
-                  max="15"
+                  min="1"
+                  max="120"
                   value={settingsDraft.shortBreak}
                   onChange={(e) => setSettingsDraft({ ...settingsDraft, shortBreak: parseInt(e.target.value, 10) })}
-                  className="w-full"
+                  className="w-full accent-chart-2"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Long break: {settingsDraft.longBreak} min</label>
                 <input
                   type="range"
-                  min="10"
-                  max="30"
+                  min="1"
+                  max="120"
                   value={settingsDraft.longBreak}
                   onChange={(e) => setSettingsDraft({ ...settingsDraft, longBreak: parseInt(e.target.value, 10) })}
-                  className="w-full"
+                  className="w-full accent-chart-4"
                 />
               </div>
               <div>
