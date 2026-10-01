@@ -52,6 +52,6 @@ export function buildPrompt(input) {
     system: base + 'Return only JSON with summary (a concise paragraph), quizQuestions (exactly 3 objects with question, options: 4 distinct strings, correctAnswer: exactly one option), and flashcards (exactly 5 objects with front and back). Base every answer on the notes.',
     prompt: `STUDY NOTES:\n${input.content}`, json: true,
   }
-  if (input.action === 'explain') return { system: base + 'Explain the concept simply in 2–3 short paragraphs, with a useful analogy.', prompt: `CONCEPT: ${input.concept}\nNOTES: ${input.context}`, json: false }
+  if (input.action === 'explain') return { system: base + 'Explain the concept simply in 2–3 short paragraphs. Keep stages, inputs and outputs distinct. Use an analogy only if it preserves the scientific relationships; explain its limits and do not attribute the outputs of one stage to another.', prompt: `CONCEPT: ${input.concept}\nNOTES: ${input.context}`, json: false }
   return { system: base + 'Return only a JSON array of 1–15 focused study blocks with subject, topic, durationMinutes (integer 5–120). Prioritize high priority tasks and nearer deadlines. Maximum total 480 minutes. Do not claim to complete any task.', prompt: JSON.stringify(input.tasks), json: true }
 }

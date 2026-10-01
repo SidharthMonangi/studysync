@@ -132,7 +132,7 @@ export default function TasksPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Task manager</h1>
-          <p className="text-muted-foreground mt-1">Organize and track your academic tasks (saved in this browser)</p>
+          <p className="text-muted-foreground mt-1">Organize and track your academic tasks, synced to your account.</p>
         </div>
         <Button onClick={openNew} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           <Plus className="w-4 h-4 mr-2" />
