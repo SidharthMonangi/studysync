@@ -36,7 +36,7 @@ export function AIInsights({ tasks, notes, analytics, streak }) {
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-chart-2 opacity-50" />
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-semibold text-foreground">AI Study Insights</h2>
+        <h2 className="text-lg font-semibold text-foreground">Study insights</h2>
       </div>
       
       <div className="space-y-4">
@@ -45,18 +45,18 @@ export function AIInsights({ tasks, notes, analytics, streak }) {
           <span className="font-semibold text-foreground">{streak} {streak === 1 ? 'day' : 'days'}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Brain className="w-4 h-4"/> Most Studied</span>
+          <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Brain className="w-4 h-4"/> Most active subject</span>
           <span className="font-semibold text-foreground truncate max-w-[120px]">{insights.mostActive}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Activity className="w-4 h-4"/> Productivity</span>
+          <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Activity className="w-4 h-4"/> Activity score</span>
           <span className={cn("font-bold", insights.score > 70 ? "text-green-500" : insights.score > 40 ? "text-yellow-500" : "text-primary")}>
-            {insights.score}%
+            {insights.score}/100
           </span>
         </div>
         
         <div className="mt-4 p-3 rounded-xl bg-primary/10 border border-primary/20">
-          <div className="text-xs font-semibold text-primary mb-1 uppercase tracking-wider">AI Recommendation</div>
+          <div className="text-xs font-semibold text-primary mb-1 uppercase tracking-wider">Suggested next step</div>
           <p className="text-sm text-foreground leading-relaxed">{insights.recommendation}</p>
         </div>
       </div>

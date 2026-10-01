@@ -92,7 +92,7 @@ export default function DashboardHome() {
     {
       label: 'Notes',
       value: String(analytics.notesCreated),
-      sub: 'saved locally',
+      sub: 'synced to your account',
       icon: Brain,
       color: 'text-chart-4',
       bgColor: 'bg-chart-4/10',

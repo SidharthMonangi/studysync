@@ -1,3 +1,4 @@
+import { validateOutput } from '../shared/ai.js'
 import { readFileSync } from 'node:fs'
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing'
 import { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
@@ -22,4 +23,11 @@ it('rejects malformed study materials on both create and update', async () => {
  await assertSucceeds(setDoc(ref,note))
  await assertFails(updateDoc(ref,{flashcards:[{front:42,back:'Invalid'}]}))
  await assertSucceeds(updateDoc(ref,{quizQuestions:[{question:'Q',options:['A','B','C','D'],correctAnswer:'A'}],flashcards:[{front:'Question',back:'Answer'}]}))
+})
+
+it('accepts the exact study-material shape returned by the API and client', async () => {
+ const db=env.authenticatedContext('alice').firestore()
+ const materials=validateOutput('notes',{summary:'Plants convert light into chemical energy.',quizQuestions:Array.from({length:3},()=>({question:'Which organelle performs photosynthesis?',options:['Chloroplast','Nucleus','Ribosome','Golgi'],correctAnswer:'Chloroplast'})),flashcards:Array.from({length:5},()=>({front:'Where does photosynthesis occur?',back:'Chloroplasts.'}))})
+ await assertSucceeds(setDoc(doc(db,'users/alice/notes/n'),{id:'n',title:'Biology',subject:'Science',content:'Plants use light energy.',createdAt:'now',updatedAt:'now',...materials}))
+ await assertSucceeds(updateDoc(doc(db,'users/alice/notes/n'),{quizQuestions:[...materials.quizQuestions,{...materials.quizQuestions[0],id:'q4'},{...materials.quizQuestions[0],id:'q5'}],updatedAt:'later'}))
 })

@@ -33,6 +33,7 @@ export default function NotesPage() {
   const [selectedId, setSelectedId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [aiError, setAiError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [showNewNote, setShowNewNote] = useState(false)
   const [newNote, setNewNote] = useState({ title: '', subject: 'General', content: '' })
@@ -48,7 +49,7 @@ export default function NotesPage() {
   const selectedNote = useMemo(() => notes.find((n) => n.id === selectedId) ?? notes[0] ?? null, [notes, selectedId])
 
   const selectNote = id => {
-    setSelectedId(id); setExplanation(''); setExplainerTerm(''); setFlashcardFlipped(false); setCurrentFlashcardIndex(0); setQuizReveal({}); setQuizSelections({})
+    setSelectedId(id); setAiError(''); setExplanation(''); setExplainerTerm(''); setFlashcardFlipped(false); setCurrentFlashcardIndex(0); setQuizReveal({}); setQuizSelections({})
   }
   const filteredNotes = notes.filter(
     (note) =>
@@ -58,11 +59,13 @@ export default function NotesPage() {
 
   const runIntel = async () => {
     if (!selectedNote) return
+    setAiError('')
     setIsGenerating(true)
     try {
       const result = await generateNoteIntel(selectedNote.id)
       if (result) toast.success('Generated AI study materials')
     } catch (err) {
+      setAiError(friendlyError(err))
       toast.error(friendlyError(err))
     } finally {
       setIsGenerating(false)
@@ -71,11 +74,13 @@ export default function NotesPage() {
 
   const handleExplain = async () => {
     if (!explainerTerm.trim() || !selectedNote) return
+    setAiError('')
     setIsExplaining(true)
     try {
       const text = await explainConcept(explainerTerm, selectedNote.content)
       setExplanation(text)
     } catch (err) {
+      setAiError(friendlyError(err))
       toast.error(friendlyError(err))
     } finally {
       setIsExplaining(false)
@@ -151,7 +156,7 @@ export default function NotesPage() {
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Notes workspace</h1>
           <p className="text-muted-foreground mt-1">
-            Powered by Gemini 1.5 Flash. Generate summaries, quizzes, and flashcards instantly.
+            Turn your course notes into AI summaries, practice questions, and flashcards.
           </p>
         </div>
         <Button onClick={() => setShowNewNote(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -160,6 +165,7 @@ export default function NotesPage() {
         </Button>
       </div>
 
+      {aiError && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm">{aiError}</p>}
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-4">
           <div className="relative">
@@ -260,6 +266,7 @@ export default function NotesPage() {
                   </div>
                   <button
                     type="button"
+                    aria-label="Delete note"
                     onClick={() => deleteNoteLocal(selectedNote.id)}
                     className="p-2 text-muted-foreground hover:text-destructive transition-smooth flex-shrink-0"
                   >

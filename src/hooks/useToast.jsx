@@ -22,7 +22,7 @@ export function ToastProvider({ children }) {
   const value = {
     toast: {
       success: (msg, dur) => addToast(msg, 'success', dur),
-      error: (msg, dur) => addToast(msg, 'error', dur),
+      error: (msg, dur = 10000) => addToast(msg, 'error', dur),
       warning: (msg, dur) => addToast(msg, 'warning', dur),
     },
   }
@@ -57,6 +57,7 @@ function ToastItem({ toast, onRemove }) {
 
   return (
     <div
+      role={toast.type === 'error' ? 'alert' : 'status'}
       className={cn(
         'flex items-center gap-3 p-4 rounded-xl glass-card pointer-events-auto shadow-lg min-w-[280px] max-w-sm transition-all duration-300 ease-in-out',
         borderClass,
@@ -67,6 +68,7 @@ function ToastItem({ toast, onRemove }) {
       <p className="text-sm font-medium text-foreground flex-1">{toast.message}</p>
       <button
         type="button"
+        aria-label="Dismiss notification"
         onClick={() => {
           setIsLeaving(true)
           setTimeout(() => onRemove(toast.id), 300)

@@ -7,7 +7,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function owner(uid) { return request.auth != null && request.auth.uid == uid; }
     function str(value, max) { return value is string && value.size() <= max; }
-    function required(value, max) { return str(value, max) && value.size() > 0; }
+    function required(value, max) { return value is string && value.size() > 0 && value.size() <= max; }
     function validProfile(d) {
       return d.keys().hasAll(['name','college','semesterYear','studyGoal','onboarded']) && d.keys().hasOnly(['name','college','semesterYear','studyGoal','onboarded'])
         && str(d.name,100) && str(d.college,200) && str(d.semesterYear,100) && str(d.studyGoal,1000) && d.onboarded is bool;
@@ -23,18 +23,22 @@ service cloud.firestore {
         && (!('updatedAt' in d) || required(d.updatedAt,40));
     }
     function quiz(q) {
-      return q is map && q.keys().hasAll(['question','options','correctAnswer']) && q.keys().hasOnly(['question','options','correctAnswer'])
-        && required(q.question,2000) && q.options is list && q.options.size() == 4 && q.options.toSet().size() == 4
-        && required(q.options[0],1000) && required(q.options[1],1000) && required(q.options[2],1000) && required(q.options[3],1000) && q.correctAnswer in q.options;
+      let o = q.options;
+      return q is map && q.get('id','q') is string && q.question is string && q.question.size() <= 2000
+        && o is list && o.size() == 4 && o.toSet().size() == 4 && q.correctAnswer in o
+        && o[0] is string && o[1] is string
+        && o[2] is string && o[3] is string;
     }
     function quizzes(q) {
-      return q is list && q.size() <= 5 && (q.size() < 1 || quiz(q[0])) && (q.size() < 2 || quiz(q[1])) && (q.size() < 3 || quiz(q[2])) && (q.size() < 4 || quiz(q[3])) && (q.size() < 5 || quiz(q[4]));
+      let n = q.size();
+      return q is list && n <= 5 && (n < 1 || quiz(q[0])) && (n < 2 || quiz(q[1])) && (n < 3 || quiz(q[2])) && (n < 4 || quiz(q[3])) && (n < 5 || quiz(q[4]));
     }
     function card(c) {
-      return c is map && c.keys().hasAll(['front','back']) && c.keys().hasOnly(['front','back']) && required(c.front,2000) && required(c.back,4000);
+      return c is map && c.get('id','f') is string && c.front is string && c.front.size() <= 2000 && c.back is string && c.back.size() <= 4000;
     }
     function cards(c) {
-      return c is list && c.size() <= 5 && (c.size() < 1 || card(c[0])) && (c.size() < 2 || card(c[1])) && (c.size() < 3 || card(c[2])) && (c.size() < 4 || card(c[3])) && (c.size() < 5 || card(c[4]));
+      let n = c.size();
+      return c is list && n <= 5 && (n < 1 || card(c[0])) && (n < 2 || card(c[1])) && (n < 3 || card(c[2])) && (n < 4 || card(c[3])) && (n < 5 || card(c[4]));
     }
     function validNote(d,id) {
       return d.keys().hasAll(['id','title','subject','content','summary','quizQuestions','flashcards','createdAt','updatedAt'])
