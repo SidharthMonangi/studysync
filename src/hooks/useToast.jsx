@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { CheckCircle2, XCircle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const ToastContext = createContext(null)
+import { ToastContext } from './ToastStore'
 
 let toastIdCount = 0
 
@@ -23,6 +23,7 @@ export function ToastProvider({ children }) {
     toast: {
       success: (msg, dur) => addToast(msg, 'success', dur),
       error: (msg, dur) => addToast(msg, 'error', dur),
+      warning: (msg, dur) => addToast(msg, 'warning', dur),
     },
   }
 
@@ -76,10 +77,4 @@ function ToastItem({ toast, onRemove }) {
       </button>
     </div>
   )
-}
-
-export function useToast() {
-  const ctx = useContext(ToastContext)
-  if (!ctx) throw new Error('useToast must be used within ToastProvider')
-  return ctx.toast
 }

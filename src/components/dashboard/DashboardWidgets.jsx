@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
-import { Sparkles, Activity, Clock, FileText, CheckCircle2, Calendar, Target, Brain, ArrowRight } from 'lucide-react'
+import { useMemo, useEffect, useState } from 'react'
+import { Sparkles, Activity, Clock, FileText, CheckCircle2, Calendar, Target, Brain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export function AIInsights({ tasks, notes, pomodoroSessions, analytics, streak }) {
+export function AIInsights({ tasks, notes, analytics, streak }) {
   const insights = useMemo(() => {
     const subjects = [...tasks.map(t => t.subject), ...notes.map(n => n.subject)].filter(Boolean)
     const counts = subjects.reduce((acc, s) => {
@@ -83,7 +83,7 @@ export function WeeklyHeatmap({ tasks, notes, pomodoroSessions }) {
       if (day) day.count++
     }
     
-    tasks.filter(t => t.status === 'completed' && t.updatedAt).forEach(t => addActivity(t.updatedAt.slice(0, 10)))
+    tasks.filter(t => t.status === 'completed' && t.updatedAt || t.createdAt).forEach(t => addActivity(t.updatedAt || t.createdAt.slice(0, 10)))
     notes.forEach(n => addActivity(n.createdAt.slice(0, 10)))
     pomodoroSessions.forEach(s => addActivity(s.completedAt.slice(0, 10)))
     
@@ -139,14 +139,14 @@ export function WeeklyHeatmap({ tasks, notes, pomodoroSessions }) {
 export function ActivityFeed({ tasks, notes, pomodoroSessions, plans }) {
   const activities = useMemo(() => {
     const items = []
-    tasks.filter(t => t.status === 'completed' && t.updatedAt).forEach(t => {
-      items.push({ id: `t-${t.id}`, type: 'task', title: `Completed: ${t.title}`, timestamp: new Date(t.updatedAt).getTime(), icon: CheckCircle2, color: 'text-primary' })
+    tasks.filter(t => t.status === 'completed' && t.updatedAt || t.createdAt).forEach(t => {
+      items.push({ id: `t-${t.id}`, type: 'task', title: `Completed: ${t.title}`, timestamp: new Date(t.updatedAt || t.createdAt).getTime(), icon: CheckCircle2, color: 'text-primary' })
     })
     notes.forEach(n => {
       items.push({ id: `n-${n.id}`, type: 'note', title: `Added: ${n.title}`, timestamp: new Date(n.createdAt).getTime(), icon: FileText, color: 'text-chart-2' })
     })
     pomodoroSessions.forEach(s => {
-      items.push({ id: `p-${s.id}`, type: 'pomodoro', title: `Finished ${s.duration}m focus`, timestamp: new Date(s.completedAt).getTime(), icon: Clock, color: 'text-chart-3' })
+      items.push({ id: `p-${s.id}`, type: 'pomodoro', title: `Finished ${s.focusMinutes}m focus`, timestamp: new Date(s.completedAt).getTime(), icon: Clock, color: 'text-chart-3' })
     })
     plans.filter(p => p.createdAt).forEach(p => {
       items.push({ id: `pl-${p.id}`, type: 'plan', title: `Scheduled: ${p.topic}`, timestamp: new Date(p.createdAt).getTime(), icon: Calendar, color: 'text-chart-4' })
@@ -155,8 +155,10 @@ export function ActivityFeed({ tasks, notes, pomodoroSessions, plans }) {
     return items.sort((a, b) => b.timestamp - a.timestamp).slice(0, 6)
   }, [tasks, notes, pomodoroSessions, plans])
 
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer) }, [])
   const timeAgo = (ts) => {
-    const diff = Date.now() - ts
+    const diff = Math.max(0, now - ts)
     const mins = Math.floor(diff / 60000)
     if (mins < 60) return `${mins || 1}m ago`
     const hours = Math.floor(mins / 60)

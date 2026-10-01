@@ -13,13 +13,13 @@ import {
   Menu,
   X,
   ChevronLeft,
-  Bell,
-  Search,
   User,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Input } from '@/components/ui/input'
-import { useAuth } from '@/context/AuthContext'
+import { WorkspaceSearch } from './WorkspaceSearch'
+import { useToast } from '@/hooks/ToastStore'
+import { friendlyError } from '@/lib/errors'
+import { useAuth } from '@/context/AuthStore'
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard' },
@@ -43,13 +43,14 @@ function navLinkClass(isActive) {
 
 export function DashboardShell({ children }) {
   const navigate = useNavigate()
+  const toast = useToast()
   const { displayName, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleLogout = () => {
-    logout()
-    navigate('/', { replace: true })
+    logout().then(() => navigate('/', { replace: true })).catch(error => toast.error(friendlyError(error)))
+
   }
 
   return (
@@ -69,7 +70,7 @@ export function DashboardShell({ children }) {
           </Link>
           <button
             type="button"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Toggle sidebar" onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-smooth"
           >
             <ChevronLeft
@@ -134,10 +135,7 @@ export function DashboardShell({ children }) {
             </div>
             <span className="font-semibold text-foreground">StudySync</span>
           </Link>
-          <button type="button" className="p-2 text-muted-foreground hover:text-foreground relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full" />
-          </button>
+          <Link to="/dashboard/settings" aria-label="Settings" className="p-2 text-muted-foreground hover:text-foreground"><Settings className="w-5 h-5" /></Link>
         </div>
       </header>
 
@@ -221,21 +219,8 @@ export function DashboardShell({ children }) {
         )}
       >
         <header className="hidden lg:flex items-center justify-between h-16 px-6 glass border-b border-border">
-          <div className="relative w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search tasks, notes, plans..."
-              className="pl-10 bg-secondary/50 border-border"
-            />
-          </div>
+          <WorkspaceSearch />
           <div className="flex items-center gap-4">
-            <button
-              type="button"
-              className="p-2 text-muted-foreground hover:text-foreground relative transition-smooth"
-            >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
-            </button>
             <Link
               to="/dashboard/settings"
               className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-secondary transition-smooth"
@@ -245,7 +230,7 @@ export function DashboardShell({ children }) {
               </div>
               <div className="hidden xl:block text-left">
                 <div className="text-sm font-medium text-foreground">{displayName}</div>
-                <div className="text-xs text-muted-foreground">Demo data · local only</div>
+                <div className="text-xs text-muted-foreground">Private cloud workspace</div>
               </div>
             </Link>
           </div>

@@ -1,13 +1,13 @@
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useState } from 'react'
+import { friendlyError } from '@/lib/errors'
 import { Sparkles, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useAuth } from '@/context/AuthContext'
-import { useToast } from '@/hooks/useToast'
+import { useAuth } from '@/context/AuthStore'
+import { useToast } from '@/hooks/ToastStore'
 
 export default function LoginPage() {
-  const navigate = useNavigate()
   const { session, profile, login } = useAuth()
   const toast = useToast()
   const [showPassword, setShowPassword] = useState(false)
@@ -32,13 +32,14 @@ export default function LoginPage() {
       return
     }
 
+    setIsLoading(true)
     try {
       await login({ email, password })
       toast.success('Signed in successfully!')
       // Redirection is handled by the session check at the top of the component
     } catch (err) {
-      setError(err.message || 'Could not sign in.')
-      toast.error(err.message || 'Could not sign in')
+      setError(friendlyError(err) || 'Could not sign in.')
+      toast.error(friendlyError(err) || 'Could not sign in')
     } finally {
       setIsLoading(false)
     }
@@ -55,7 +56,7 @@ export default function LoginPage() {
             <span className="text-xl font-semibold text-foreground">StudySync AI</span>
           </Link>
           <h1 className="text-2xl font-bold text-foreground mb-2">Welcome back</h1>
-          <p className="text-muted-foreground">Sign in with the account you created on this device.</p>
+          <p className="text-muted-foreground">Your study workspace, synced across devices.</p>
         </div>
 
         <div className="glass-card rounded-2xl p-8">
@@ -96,6 +97,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-smooth"
                 >

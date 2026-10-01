@@ -1,12 +1,13 @@
+import { friendlyError } from '@/lib/errors'
 import { useMemo, useState } from 'react'
 import { Calendar, Clock, Plus, Trash2, Pencil, CheckCircle2, BookOpen, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { usePlanner } from '@/context/PlannerContext'
-import { useTasks } from '@/context/TasksContext'
+import { usePlanner } from '@/context/PlannerStore'
+import { useTasks } from '@/context/TasksStore'
 import { useAnalytics } from '@/hooks/useAnalytics'
-import { useToast } from '@/hooks/useToast'
+import { useToast } from '@/hooks/ToastStore'
 import { todayISO, formatISODate } from '@/lib/dates'
 import { EmptyState } from '@/components/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -14,7 +15,7 @@ import { generateStudyPlan } from '@/lib/gemini'
 import { Sparkles } from 'lucide-react'
 
 export default function PlannerPage() {
-  const { plans, isLoading, addPlan, updatePlan, deletePlan } = usePlanner()
+  const { plans, isLoading, addPlan, addPlans, updatePlan, deletePlan } = usePlanner()
   const { analytics } = useAnalytics()
   const toast = useToast()
   const [showModal, setShowModal] = useState(false)
@@ -108,18 +109,17 @@ export default function PlannerPage() {
         toast.success('Plan added')
       }
       setShowModal(false)
-    } finally {
+    } catch (error) { toast.error(friendlyError(error)) } finally {
       setIsSubmitting(false)
     }
   }
 
   const handleDelete = async (id) => {
-    await deletePlan(id)
-    toast.success('Plan deleted')
+    try { await deletePlan(id); toast.success('Deleted') } catch (error) { toast.error(friendlyError(error)) }
   }
 
   const handleToggle = async (id, status) => {
-    await updatePlan(id, { status: status === 'completed' ? 'planned' : 'completed' })
+    try { await updatePlan(id, { status: status === 'completed' ? 'planned' : 'completed' }) } catch (error) { toast.error(friendlyError(error)) }
   }
 
   const handleGeneratePlan = async () => {
@@ -133,56 +133,16 @@ export default function PlannerPage() {
     try {
       const suggestedPlans = await generateStudyPlan(openTasks)
       
-      let currentHour = 9
-      let currentMinute = 0
-      
-      for (const sp of suggestedPlans) {
-        const startTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`
-        
-        await addPlan({
-          subject: sp.subject || 'General',
-          topic: sp.topic || 'Study Session',
-          date: todayISO(),
-          startTime: startTime,
-          durationMinutes: sp.durationMinutes || 25,
-          status: 'planned'
-        })
-        
-        currentMinute += (sp.durationMinutes || 25)
-        if (currentMinute >= 60) {
-          currentHour += Math.floor(currentMinute / 60)
-          currentMinute = currentMinute % 60
-        }
-      }
-      
-      toast.success('Generated AI study plan!')
-    } catch (err) {
-      if (err.name === 'GeminiQuotaError') {
-        let currentHour = 9
-        let currentMinute = 0
-        
-        for (const task of openTasks) {
-          const startTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`
-          
-          await addPlan({
-            subject: task.subject || 'General',
-            topic: task.title || 'Study Session',
-            date: todayISO(),
-            startTime: startTime,
-            durationMinutes: 25,
-            status: 'planned'
-          })
-          
-          currentMinute += 25
-          if (currentMinute >= 60) {
-            currentHour += Math.floor(currentMinute / 60)
-            currentMinute = currentMinute % 60
-          }
-        }
-        toast.warning('Gemini quota reached. Showing local fallback materials.')
-      } else {
-        toast.error(err.message || 'Failed to generate study plan.')
-      }
+      let minutes = 9 * 60
+      const rows = suggestedPlans.map(sp => {
+        const row = { ...sp, date: todayISO(), startTime: `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`, status: 'planned' }
+        minutes += sp.durationMinutes + 5
+        return row
+      })
+      await addPlans(rows)
+      toast.success('Generated and saved your study plan')
+    } catch (error) {
+      toast.error(friendlyError(error))
     } finally {
       setIsGeneratingPlan(false)
     }
@@ -414,6 +374,7 @@ export default function PlannerPage() {
                   value={form.topic}
                   onChange={(e) => setForm({ ...form, topic: e.target.value })}
                   className="bg-secondary/50 border-border"
+                  maxLength={500}
                   placeholder="e.g. Chapter 5 problem set"
                 />
               </div>

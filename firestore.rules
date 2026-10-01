@@ -1,0 +1,82 @@
+// Prototype rules for the existing Standard database.
+// Data model: users/{uid} profile; owner-only tasks, notes, planner, sessions,
+// pomodoroSettings and aiUsage subcollections. String timestamps retain existing data.
+// Every create/update validates the resulting document. Document IDs are immutable.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function str(value, max) { return value is string && value.size() <= max; }
+    function required(value, max) { return str(value, max) && value.size() > 0; }
+    function validProfile(d) {
+      return d.keys().hasAll(['name','college','semesterYear','studyGoal','onboarded']) && d.keys().hasOnly(['name','college','semesterYear','studyGoal','onboarded'])
+        && str(d.name,100) && str(d.college,200) && str(d.semesterYear,100) && str(d.studyGoal,1000) && d.onboarded is bool;
+    }
+    function validTask(d,id) {
+      return d.keys().hasAll(['id','title','description','subject','dueDate','dueTime','priority','status','progress','createdAt'])
+        && d.keys().hasOnly(['id','title','description','subject','dueDate','dueTime','priority','status','progress','createdAt','updatedAt'])
+        && d.id == id && required(d.title,200) && str(d.description,5000) && required(d.subject,100)
+        && str(d.dueDate,10) && (d.dueDate == '' || d.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        && str(d.dueTime,5) && (d.dueTime == '' || d.dueTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
+        && d.priority in ['low','medium','high'] && d.status in ['todo','in-progress','completed']
+        && d.progress is number && d.progress >= 0 && d.progress <= 100 && required(d.createdAt,40)
+        && (!('updatedAt' in d) || required(d.updatedAt,40));
+    }
+    function quiz(q) {
+      return q is map && q.keys().hasAll(['question','options','correctAnswer']) && q.keys().hasOnly(['question','options','correctAnswer'])
+        && required(q.question,2000) && q.options is list && q.options.size() == 4 && q.options.toSet().size() == 4
+        && required(q.options[0],1000) && required(q.options[1],1000) && required(q.options[2],1000) && required(q.options[3],1000) && q.correctAnswer in q.options;
+    }
+    function quizzes(q) {
+      return q is list && q.size() <= 5 && (q.size() < 1 || quiz(q[0])) && (q.size() < 2 || quiz(q[1])) && (q.size() < 3 || quiz(q[2])) && (q.size() < 4 || quiz(q[3])) && (q.size() < 5 || quiz(q[4]));
+    }
+    function card(c) {
+      return c is map && c.keys().hasAll(['front','back']) && c.keys().hasOnly(['front','back']) && required(c.front,2000) && required(c.back,4000);
+    }
+    function cards(c) {
+      return c is list && c.size() <= 5 && (c.size() < 1 || card(c[0])) && (c.size() < 2 || card(c[1])) && (c.size() < 3 || card(c[2])) && (c.size() < 4 || card(c[3])) && (c.size() < 5 || card(c[4]));
+    }
+    function validNote(d,id) {
+      return d.keys().hasAll(['id','title','subject','content','summary','quizQuestions','flashcards','createdAt','updatedAt'])
+        && d.keys().hasOnly(['id','title','subject','content','summary','quizQuestions','flashcards','createdAt','updatedAt'])
+        && d.id == id && required(d.title,200) && required(d.subject,100) && required(d.content,30000)
+        && (d.summary == null || str(d.summary,12000))
+        && (d.quizQuestions == null || quizzes(d.quizQuestions))
+        && (d.flashcards == null || cards(d.flashcards))
+        && required(d.createdAt,40) && required(d.updatedAt,40);
+    }
+    function validPlan(d,id) {
+      return d.keys().hasAll(['id','subject','topic','date','startTime','durationMinutes','status','createdAt'])
+        && d.keys().hasOnly(['id','subject','topic','date','startTime','durationMinutes','status','createdAt'])
+        && d.id == id && required(d.subject,100) && str(d.topic,500) && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.startTime is string && d.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$') && d.durationMinutes is int && d.durationMinutes >= 5 && d.durationMinutes <= 120
+        && d.status in ['planned','completed'] && required(d.createdAt,40);
+    }
+    function validSession(d,id) {
+      return d.keys().hasAll(['id','completedAt','focusMinutes']) && d.keys().hasOnly(['id','completedAt','focusMinutes']) && d.id == id && required(d.completedAt,40) && d.focusMinutes is number && d.focusMinutes >= 1 && d.focusMinutes <= 120;
+    }
+    function validSettings(d) {
+      return d.keys().hasAll(['focus','shortBreak','longBreak','sessionsBeforeLongBreak']) && d.keys().hasOnly(['focus','shortBreak','longBreak','sessionsBeforeLongBreak'])
+        && d.focus is int && d.focus >= 1 && d.focus <= 120 && d.shortBreak is int && d.shortBreak >= 1 && d.shortBreak <= 120 && d.longBreak is int && d.longBreak >= 1 && d.longBreak <= 120
+        && d.sessionsBeforeLongBreak is int && d.sessionsBeforeLongBreak >= 2 && d.sessionsBeforeLongBreak <= 8;
+    }
+    function validUsage(d,day) {
+      return d.keys().hasAll(['count','lastRequest']) && d.keys().hasOnly(['count','lastRequest']) && d.count is int && d.count >= 1 && d.count <= 20
+        && d.lastRequest == request.time && day == string(request.time.year() * 10000 + request.time.month() * 100 + request.time.day());
+    }
+    match /users/{uid} {
+      allow read: if owner(uid);
+      allow create, update: if owner(uid) && validProfile(request.resource.data);
+      match /tasks/{id} { allow read, delete: if owner(uid); allow create, update: if owner(uid) && validTask(request.resource.data,id); }
+      match /notes/{id} { allow read, delete: if owner(uid); allow create, update: if owner(uid) && validNote(request.resource.data,id); }
+      match /planner/{id} { allow read, delete: if owner(uid); allow create, update: if owner(uid) && validPlan(request.resource.data,id); }
+      match /sessions/{id} { allow read: if owner(uid); allow create: if owner(uid) && validSession(request.resource.data,id); }
+      match /pomodoroSettings/{id} { allow read: if owner(uid); allow create, update: if owner(uid) && id == 'default' && validSettings(request.resource.data); }
+      match /aiUsage/{day} {
+        allow read: if owner(uid);
+        allow create: if owner(uid) && validUsage(request.resource.data,day) && request.resource.data.count == 1;
+        allow update: if owner(uid) && validUsage(request.resource.data,day) && request.resource.data.count == resource.data.count + 1 && request.time >= resource.data.lastRequest + duration.value(10,'s');
+      }
+    }
+  }
+}

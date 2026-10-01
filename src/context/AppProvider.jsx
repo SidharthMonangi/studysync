@@ -1,24 +1,15 @@
-import { AuthProvider } from './AuthContext'
-import { TasksProvider } from './TasksContext'
-import { PlannerProvider } from './PlannerContext'
-import { PomodoroProvider } from './PomodoroContext'
-import { NotesProvider } from './NotesContext'
+import { useEffect } from 'react'
+import { applyTheme } from '@/lib/theme'
 import { ToastProvider } from '@/hooks/useToast'
 
 export function AppProvider({ children }) {
+  useEffect(() => {
+    const update = () => applyTheme(localStorage.getItem('studysync-theme') || 'dark')
+    const media = window.matchMedia('(prefers-color-scheme: light)')
+    update(); media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <TasksProvider>
-          <PlannerProvider>
-            <PomodoroProvider>
-              <NotesProvider>
-                {children}
-              </NotesProvider>
-            </PomodoroProvider>
-          </PlannerProvider>
-        </TasksProvider>
-      </AuthProvider>
-    </ToastProvider>
+    <ToastProvider>{children}</ToastProvider>
   )
 }

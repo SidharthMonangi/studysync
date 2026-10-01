@@ -1,3 +1,6 @@
+import { localISO } from '@/lib/dates'
+import { friendlyError } from '@/lib/errors'
+import { useToast } from '@/hooks/ToastStore'
 import { useMemo } from 'react'
 import {
   CheckCircle2,
@@ -14,11 +17,11 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
-import { useTasks } from '@/context/TasksContext'
-import { usePlanner } from '@/context/PlannerContext'
-import { usePomodoro } from '@/context/PomodoroContext'
-import { useNotes } from '@/context/NotesContext'
+import { useAuth } from '@/context/AuthStore'
+import { useTasks } from '@/context/TasksStore'
+import { usePlanner } from '@/context/PlannerStore'
+import { usePomodoro } from '@/context/PomodoroStore'
+import { useNotes } from '@/context/NotesStore'
 import { useAnalytics } from '@/hooks/useAnalytics'
 import { todayISO, formatDueLine, formatTimeShort } from '@/lib/dates'
 import { EmptyState } from '@/components/EmptyState'
@@ -27,7 +30,7 @@ import { cn } from '@/lib/utils'
 import { AIInsights, WeeklyHeatmap, ActivityFeed } from '@/components/dashboard/DashboardWidgets'
 
 function streakFromSessions(sessions) {
-  const days = new Set((sessions || []).map((s) => (s.completedAt || '').slice(0, 10)))
+  const days = new Set((sessions || []).map((s) => localISO(s.completedAt)))
   let streak = 0
   const d = new Date()
   for (let i = 0; i < 365; i++) {
@@ -47,11 +50,12 @@ function taskSortKey(t) {
 }
 
 export default function DashboardHome() {
+  const toast = useToast()
   const { displayName } = useAuth()
   const { tasks, isLoading: tasksLoading, toggleTaskComplete } = useTasks()
   const { plans, isLoading: plansLoading } = usePlanner()
   const { notes, isLoading: notesLoading } = useNotes()
-  const { pomodoroSessions, isLoading: pomodoroLoading } = usePomodoro()
+  const { pomodoroSessions } = usePomodoro()
   const { analytics } = useAnalytics()
 
   const greeting = useMemo(() => {
@@ -202,7 +206,7 @@ export default function DashboardHome() {
                   >
                     <button
                       type="button"
-                      onClick={() => toggleTaskComplete(task.id)}
+                      onClick={() => toggleTaskComplete(task.id).catch(error => toast.error(friendlyError(error)))}
                       className="w-5 h-5 rounded-full border-2 border-muted-foreground/50 hover:border-primary hover:bg-primary/20 transition-smooth flex-shrink-0"
                       aria-label="Mark complete"
                     />
@@ -264,7 +268,7 @@ export default function DashboardHome() {
               <EmptyState
                 icon={FileText}
                 title="No notes yet"
-                description="Capture lecture snippets and generate a local summary plus quiz questions."
+                description="Capture lecture snippets and generate AI summaries, quizzes, and flashcards."
                 actionLabel="Open notes"
                 actionTo="/dashboard/notes"
               />

@@ -1,10 +1,11 @@
+import { friendlyError } from '@/lib/errors'
 import { useMemo, useState } from 'react'
 import { Plus, Search, CheckCircle2, Calendar, Trash2, Pencil, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { useTasks } from '@/context/TasksContext'
-import { useToast } from '@/hooks/useToast'
+import { useTasks } from '@/context/TasksStore'
+import { useToast } from '@/hooks/ToastStore'
 import { formatDueLine } from '@/lib/dates'
 import { EmptyState } from '@/components/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -110,14 +111,13 @@ export default function TasksPage() {
         toast.success('Task added')
       }
       setShowModal(false)
-    } finally {
+    } catch (error) { toast.error(friendlyError(error)) } finally {
       setIsSubmitting(false)
     }
   }
 
   const handleDelete = async (id) => {
-    await deleteTask(id)
-    toast.success('Task deleted')
+    try { await deleteTask(id); toast.success('Deleted') } catch (error) { toast.error(friendlyError(error)) }
   }
 
   const taskCounts = {
@@ -236,7 +236,7 @@ export default function TasksPage() {
               <div className="flex items-start gap-4">
                 <button
                   type="button"
-                  onClick={() => toggleTaskComplete(task.id)}
+                  onClick={() => toggleTaskComplete(task.id).catch(error => toast.error(friendlyError(error)))}
                   className={cn(
                     'mt-1 w-5 h-5 rounded-full border-2 flex-shrink-0 transition-smooth flex items-center justify-center',
                     task.status === 'completed'
@@ -323,6 +323,7 @@ export default function TasksPage() {
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Title *</label>
                 <Input
+                  maxLength={200}
                   placeholder="Task title"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -332,6 +333,7 @@ export default function TasksPage() {
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Description</label>
                 <textarea
+                  maxLength={5000}
                   placeholder="Optional details"
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}

@@ -1,12 +1,12 @@
+import { localISO } from '@/lib/dates'
 import { useMemo } from 'react'
 import { Clock, CheckCircle2, Brain, Calendar, FileText, ListTodo, Target } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAnalytics } from '@/hooks/useAnalytics'
-import { useTasks } from '@/context/TasksContext'
-import { usePlanner } from '@/context/PlannerContext'
-import { usePomodoro } from '@/context/PomodoroContext'
-import { useNotes } from '@/context/NotesContext'
+import { useTasks } from '@/context/TasksStore'
+import { usePomodoro } from '@/context/PomodoroStore'
+import { useNotes } from '@/context/NotesStore'
 import {
   AreaChart,
   Area,
@@ -42,7 +42,6 @@ function weekDaySeries() {
 export default function AnalyticsPage() {
   const { analytics } = useAnalytics()
   const { tasks } = useTasks()
-  const { plans } = usePlanner()
   const { notes } = useNotes()
   const { pomodoroSessions } = usePomodoro()
 
@@ -51,7 +50,7 @@ export default function AnalyticsPage() {
   const focusChart = useMemo(() => {
     return week.map(({ iso, label }) => {
       const minutes = pomodoroSessions
-        .filter((s) => (s.completedAt || '').startsWith(iso))
+        .filter((s) => localISO(s.completedAt) === iso)
         .reduce((a, s) => a + (s.focusMinutes || 0), 0)
       return { day: label, hours: Math.round((minutes / 60) * 10) / 10, minutes }
     })
@@ -59,7 +58,7 @@ export default function AnalyticsPage() {
 
   const tasksCreatedChart = useMemo(() => {
     return week.map(({ iso, label }) => {
-      const count = tasks.filter((t) => (t.createdAt || '').startsWith(iso)).length
+      const count = tasks.filter((t) => localISO(t.createdAt) === iso).length
       return { day: label, created: count }
     })
   }, [tasks, week])
@@ -77,7 +76,7 @@ export default function AnalyticsPage() {
     const rows = []
     tasks.forEach((t) => {
       rows.push({
-        sort: t.createdAt || '',
+        sort: t.updatedAt || t.createdAt || '',
         text: t.status === 'completed' ? 'Task completed' : 'Task updated',
         detail: t.title,
       })
@@ -126,7 +125,7 @@ export default function AnalyticsPage() {
     {
       label: 'Focus sessions',
       value: String(analytics.focusSessions),
-      sub: 'stored in this browser',
+      sub: 'synced to your account',
       icon: Brain,
       color: 'text-chart-4',
       bgColor: 'bg-chart-4/10',
@@ -141,6 +140,12 @@ export default function AnalyticsPage() {
     },
   ]
 
+  const exportReport = () => {
+    const data = { exportedAt: new Date().toISOString(), summary: analytics, focusChart, tasksCreatedChart, subjectPie, activity }
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+    const link = document.createElement('a'); link.href = url; link.download = 'studysync-progress.json'; link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
   const taskCompletionRate = analytics.totalTasks === 0 ? 0 : Math.round((analytics.completedTasks / analytics.totalTasks) * 100)
 
   return (
@@ -148,11 +153,11 @@ export default function AnalyticsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Analytics</h1>
-          <p className="text-muted-foreground mt-1">Charts reflect your local data from the past seven days (rolling).</p>
+          <p className="text-muted-foreground mt-1">Weekly charts show the last seven days. Summary cards show your full history.</p>
         </div>
-        <Button type="button" variant="outline" className="glass-button" disabled title="Export needs a backend file download—add when you wire APIs.">
+        <Button type="button" variant="outline" className="glass-button" onClick={exportReport}>
           <Calendar className="w-4 h-4 mr-2" />
-          Export (soon)
+          Export report
         </Button>
       </div>
 

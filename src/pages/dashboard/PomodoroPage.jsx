@@ -1,3 +1,6 @@
+import { localISO } from '@/lib/dates'
+import { durationFor, remainingSeconds } from '@/lib/timer'
+import { friendlyError } from '@/lib/errors'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   Play,
@@ -13,141 +16,79 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { usePomodoro } from '@/context/PomodoroContext'
-import { useTasks } from '@/context/TasksContext'
-import { useToast } from '@/hooks/useToast'
+import { usePomodoro } from '@/context/PomodoroStore'
+import { useTasks } from '@/context/TasksStore'
+import { useToast } from '@/hooks/ToastStore'
 import { todayISO } from '@/lib/dates'
 
 export default function PomodoroPage() {
+  const { isLoading, pomodoroSettings } = usePomodoro()
+  if (isLoading) return <div role="status">Loading focus settings…</div>
+  return <PomodoroWorkspace key={`${pomodoroSettings.focus}-${pomodoroSettings.shortBreak}-${pomodoroSettings.longBreak}-${pomodoroSettings.sessionsBeforeLongBreak}`} />
+}
+function PomodoroWorkspace() {
   const { pomodoroSettings, setPomodoroSettings, pomodoroSessions, recordFocusSessionComplete } = usePomodoro()
   const { tasks } = useTasks()
   const toast = useToast()
 
   const [mode, setMode] = useState('focus')
-  const [timeLeft, setTimeLeft] = useState(() => Math.max(1, Number(pomodoroSettings.focus) || 25) * 60)
+  const [timeLeft, setTimeLeft] = useState(() => durationFor('focus', pomodoroSettings))
   const [isRunning, setIsRunning] = useState(false)
   const [focusCycles, setFocusCycles] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState(pomodoroSettings)
   const [currentTask, setCurrentTask] = useState('Study session')
-
-  const timeLeftRef = useRef(timeLeft)
-  const modeRef = useRef(mode)
-  const settingsRef = useRef(pomodoroSettings)
-  const handleCompleteRef = useRef(() => {})
-
-  useEffect(() => {
-    timeLeftRef.current = timeLeft
-  }, [timeLeft])
-  useEffect(() => {
-    modeRef.current = mode
-  }, [mode])
-  useEffect(() => {
-    settingsRef.current = pomodoroSettings
-  }, [pomodoroSettings])
-
-  const switchMode = useCallback((newMode) => {
-    setMode(newMode)
-    const s = settingsRef.current
-    const len = Math.max(1, Number(newMode === 'focus' ? s.focus : newMode === 'shortBreak' ? s.shortBreak : s.longBreak) || 25)
-    setTimeLeft(len * 60)
-  }, [])
-
-  const handleComplete = useCallback(() => {
-    setIsRunning(false)
-    const m = modeRef.current
-    const s = settingsRef.current
-    if (m === 'focus') {
-      recordFocusSessionComplete(s.focus)
-      setFocusCycles((c) => {
-        const next = c + 1
-        const nextMode = next % s.sessionsBeforeLongBreak === 0 ? 'longBreak' : 'shortBreak'
-        queueMicrotask(() => switchMode(nextMode))
-        return next
-      })
-    } else {
-      switchMode('focus')
-    }
-  }, [recordFocusSessionComplete, switchMode])
-
-  useEffect(() => {
-    handleCompleteRef.current = handleComplete
-  }, [handleComplete])
-
-  useEffect(() => {
-    if (!isRunning) return undefined
-    const id = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 0) return prev
-        if (prev === 1) {
-          queueMicrotask(() => handleCompleteRef.current())
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(id)
-  }, [isRunning])
-
-  useEffect(() => {
-    setSettingsDraft(pomodoroSettings)
-    if (!isRunning) {
-      const s = pomodoroSettings
-      const len = Math.max(1, Number(mode === 'focus' ? s.focus : mode === 'shortBreak' ? s.shortBreak : s.longBreak) || 25)
-      setTimeLeft(len * 60)
-    }
-  }, [pomodoroSettings, isRunning, mode])
-
-  const currentDuration = Math.max(1, Number(mode === 'focus' ? pomodoroSettings.focus : mode === 'shortBreak' ? pomodoroSettings.shortBreak : pomodoroSettings.longBreak) || 25)
+  const deadline = useRef(null)
+  const completed = useRef(false)
+  const currentDuration = durationFor(mode, pomodoroSettings) / 60
   const totalTime = currentDuration * 60
-  const progress = totalTime === 0 ? 0 : ((totalTime - timeLeft) / totalTime) * 100
-
-  const formatTime = (seconds) => {
-    if (isNaN(seconds)) return "00:00"
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  const progress = Math.max(0, Math.min(100, ((totalTime - timeLeft) / totalTime) * 100))
+  const switchMode = newMode => {
+    deadline.current = null; completed.current = false; setIsRunning(false); setMode(newMode); setTimeLeft(durationFor(newMode, pomodoroSettings))
   }
-
-  const toggleTimer = () => setIsRunning((r) => !r)
-
-  const resetTimer = () => {
-    const s = pomodoroSettings
-    const len = Math.max(1, Number(mode === 'focus' ? s.focus : mode === 'shortBreak' ? s.shortBreak : s.longBreak) || 25)
-    setTimeLeft(len * 60)
-    setIsRunning(false)
-  }
-
-  const skipSession = () => {
-    setIsRunning(false)
-    const m = modeRef.current
-    const s = settingsRef.current
-    if (m === 'focus') {
-      const next = (focusCycles + 1) % s.sessionsBeforeLongBreak === 0 ? 'longBreak' : 'shortBreak'
-      switchMode(next)
-    } else {
-      switchMode('focus')
+  const handleComplete = useCallback(() => {
+    if (completed.current) return
+    completed.current = true; deadline.current = null; setIsRunning(false)
+    if (mode === 'focus') {
+      recordFocusSessionComplete(pomodoroSettings.focus).then(() => toast.success('Focus session saved')).catch(error => toast.error(friendlyError(error)))
+      const next = focusCycles + 1
+      setFocusCycles(next)
+      const nextMode = next % pomodoroSettings.sessionsBeforeLongBreak === 0 ? 'longBreak' : 'shortBreak'
+      setMode(nextMode); setTimeLeft(durationFor(nextMode, pomodoroSettings))
+    } else { setMode('focus'); setTimeLeft(durationFor('focus', pomodoroSettings)) }
+  }, [mode, focusCycles, pomodoroSettings, recordFocusSessionComplete, toast])
+  useEffect(() => {
+    if (!isRunning) return
+    const tick = () => {
+      const remaining = remainingSeconds(deadline.current, Date.now())
+      setTimeLeft(remaining)
+      if (!remaining) handleComplete()
     }
+    const timer = setInterval(tick, 250)
+    document.addEventListener('visibilitychange', tick)
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', tick) }
+  }, [isRunning, handleComplete])
+  const toggleTimer = () => {
+    if (isRunning) { setTimeLeft(remainingSeconds(deadline.current, Date.now())); deadline.current = null; setIsRunning(false) }
+    else { completed.current = false; deadline.current = Date.now() + timeLeft * 1000; setIsRunning(true) }
   }
-
-  const saveSettingsFromModal = () => {
+  const formatTime = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+  const resetTimer = () => switchMode(mode)
+  const skipSession = () => switchMode(mode === 'focus' ? 'shortBreak' : 'focus')
+  const saveSettingsFromModal = async () => {
     const next = {
       focus: Math.min(120, Math.max(1, Number(settingsDraft.focus) || 25)),
       shortBreak: Math.min(120, Math.max(1, Number(settingsDraft.shortBreak) || 5)),
       longBreak: Math.min(120, Math.max(1, Number(settingsDraft.longBreak) || 15)),
       sessionsBeforeLongBreak: Math.min(8, Math.max(2, Number(settingsDraft.sessionsBeforeLongBreak) || 4)),
     }
-    setPomodoroSettings(next)
-    setShowSettings(false)
-    setIsRunning(false)
-    const len = Math.max(1, Number(mode === 'focus' ? next.focus : mode === 'shortBreak' ? next.shortBreak : next.longBreak) || 25)
-    setTimeLeft(len * 60)
-    toast.success('Timer settings saved')
+    try { await setPomodoroSettings(next); deadline.current = null; setIsRunning(false); setTimeLeft(durationFor(mode, next)); setShowSettings(false); toast.success('Timer settings saved') }
+    catch (error) { toast.error(friendlyError(error)) }
   }
 
   const today = todayISO()
   const todaySessions = useMemo(
-    () => pomodoroSessions.filter((s) => (s.completedAt || '').startsWith(today)),
+    () => pomodoroSessions.filter((s) => localISO(s.completedAt) === today),
     [pomodoroSessions, today],
   )
   const todayMinutes = useMemo(() => todaySessions.reduce((a, s) => a + (s.focusMinutes || 0), 0), [todaySessions])
@@ -176,7 +117,7 @@ export default function PomodoroPage() {
           <p className="text-muted-foreground mt-1">Completed focus blocks are saved and roll into analytics study hours.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => setShowSettings(true)} className="glass-button">
+          <Button type="button" variant="outline" onClick={() => { setSettingsDraft(pomodoroSettings); setShowSettings(true) }} className="glass-button">
             <Settings className="w-4 h-4 mr-2" />
             Settings
           </Button>
@@ -283,11 +224,12 @@ export default function PomodoroPage() {
             </div>
 
             <div className="flex justify-center gap-4">
-              <Button type="button" variant="outline" size="icon" onClick={resetTimer} className="w-12 h-12 rounded-xl glass-button">
+              <Button type="button" variant="outline" size="icon" aria-label="Reset timer" onClick={resetTimer} className="w-12 h-12 rounded-xl glass-button">
                 <RotateCcw className="w-5 h-5" />
               </Button>
               <Button
                 type="button"
+                aria-label={isRunning ? 'Pause timer' : 'Start timer'}
                 onClick={toggleTimer}
                 className={cn(
                   'w-16 h-16 rounded-2xl text-lg',
@@ -301,7 +243,7 @@ export default function PomodoroPage() {
               >
                 {isRunning ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
               </Button>
-              <Button type="button" variant="outline" size="icon" onClick={skipSession} className="w-12 h-12 rounded-xl glass-button">
+              <Button type="button" variant="outline" size="icon" aria-label="Skip session" onClick={skipSession} className="w-12 h-12 rounded-xl glass-button">
                 <SkipForward className="w-5 h-5" />
               </Button>
             </div>

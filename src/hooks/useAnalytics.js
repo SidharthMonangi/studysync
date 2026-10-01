@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
-import { useTasks } from '@/context/TasksContext'
-import { usePomodoro } from '@/context/PomodoroContext'
-import { useNotes } from '@/context/NotesContext'
-import { usePlanner } from '@/context/PlannerContext'
+import { useTasks } from '@/context/TasksStore'
+import { usePomodoro } from '@/context/PomodoroStore'
+import { useNotes } from '@/context/NotesStore'
+import { usePlanner } from '@/context/PlannerStore'
 
 export function useAnalytics() {
   const { tasks } = useTasks()

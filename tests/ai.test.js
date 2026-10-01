@@ -1,0 +1,31 @@
+import { describe, it, expect, vi } from 'vitest'
+import { validateInput, validateOutput } from '../shared/ai.js'
+import { createHandler } from '../api/ai.js'
+import { ApiError } from '../api/_lib/errors.js'
+import { reserveQuota } from '../api/_lib/quota.js'
+const intel = () => ({ summary: 'Photosynthesis converts light into chemical energy.', quizQuestions: Array.from({ length: 3 }, (_, i) => ({ question: `Question ${i}`, options: ['Light', 'Sound', 'Heat', 'Motion'], correctAnswer: 'Light' })), flashcards: Array.from({ length: 5 }, () => ({ front: 'What powers photosynthesis?', back: 'Light energy.' })) })
+function response() { return { statusCode: 200, headers: {}, setHeader(k,v) { this.headers[k]=v }, status(s) { this.statusCode=s;return this }, json(d) { this.data=d;return this } } }
+const env = { GEMINI_API_KEY: 'test-server-secret', FIREBASE_PROJECT_ID: 'test-project' }
+const req = body => ({ method: 'POST', headers: { authorization: 'Bearer test-token', host: 'studysync.test', origin: 'https://studysync.test' }, body })
+describe('AI request boundaries', () => {
+  it('rejects short notes, oversized notes and unsupported actions', () => { for (const input of [{ action:'notes', content:'tiny' }, { action:'notes', content:'x'.repeat(30001) }, { action:'unknown' }]) expect(() => validateInput(input)).toThrow() })
+  it('rejects invalid and excessive tasks', () => { expect(() => validateInput({ action:'plan', tasks:[] })).toThrow(); expect(() => validateInput({ action:'plan', tasks:Array(31).fill({}) })).toThrow() })
+  it('accepts valid intel and normalizes generated IDs', () => { expect(validateOutput('notes',intel()).quizQuestions[0].id).toBe('q1') })
+  it('rejects fabricated option mapping and duplicate options', () => { const output=intel(); output.quizQuestions[0].correctAnswer='Not an option'; expect(() => validateOutput('notes',output)).toThrow(); output.quizQuestions[0].correctAnswer='Light';output.quizQuestions[0].options=['Light','Light','Heat','Motion'];expect(() => validateOutput('notes',output)).toThrow() })
+  it('rejects excessive schedules and noninteger durations', () => { expect(() => validateOutput('plan',Array(5).fill({subject:'Math',topic:'Practice',durationMinutes:120}))).toThrow(); expect(() => validateOutput('plan',[{subject:'Math',topic:'Practice',durationMinutes:5.5}])).toThrow() })
+})
+describe('secure AI handler', () => {
+  it('rejects GET and declares POST', async () => { const res=response(); await createHandler()({method:'GET'},res);expect(res.statusCode).toBe(405);expect(res.headers.Allow).toBe('POST') })
+  it('fails clearly when configuration is absent', async () => { const res=response();await createHandler({env:{}})(req({}),res);expect(res.statusCode).toBe(503) })
+  it('rejects invalid authentication before any provider call', async () => { const fetcher=vi.fn();const res=response();await createHandler({env,verify:async()=>{throw new ApiError(401,'UNAUTHENTICATED','Sign in')},fetcher})(req({action:'notes',content:'A sufficiently long note'}),res);expect(res.statusCode).toBe(401);expect(fetcher).not.toHaveBeenCalled() })
+  it('rejects a foreign origin', async () => { const res=response();const r=req({});r.headers.origin='https://attacker.test';await createHandler({env})(r,res);expect(res.statusCode).toBe(403) })
+  it('validates before reserving quota', async () => { const reserve=vi.fn();const res=response();await createHandler({env,verify:async()=> 'user',reserve})(req({action:'notes',content:'tiny'}),res);expect(res.statusCode).toBe(400);expect(reserve).not.toHaveBeenCalled() })
+  it('sends the key only to Google in a header and validates output', async () => { const fetcher=vi.fn(async()=>new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify(intel())}]}}]})));const res=response();await createHandler({env,verify:async()=> 'user',reserve:async()=>{},fetcher})(req({action:'notes',content:'Plants use sunlight for photosynthesis.'}),res);expect(res.statusCode).toBe(200);expect(fetcher.mock.calls[0][0]).not.toContain(env.GEMINI_API_KEY);expect(fetcher.mock.calls[0][1].headers['x-goog-api-key']).toBe(env.GEMINI_API_KEY);expect(JSON.stringify(res.data)).not.toContain(env.GEMINI_API_KEY) })
+  it.each([429,404,500])('maps provider status %s without leaking its response',async status=>{const res=response();await createHandler({env,verify:async()=> 'user',reserve:async()=>{},fetcher:async()=>new Response('PRIVATE DETAILS',{status})})(req({action:'explain',concept:'Gravity',context:''}),res);expect(res.statusCode).toBe(status===429?429:status===404?503:502);expect(JSON.stringify(res.data)).not.toContain('PRIVATE DETAILS')})
+  it('rejects malformed provider JSON',async()=>{const res=response();await createHandler({env,verify:async()=> 'user',reserve:async()=>{},fetcher:async()=>new Response(JSON.stringify({candidates:[{content:{parts:[{text:'not json'}]}}]}))})(req({action:'notes',content:'Plants use sunlight for photosynthesis.'}),res);expect(res.statusCode).toBe(502)})
+})
+describe('durable quota',()=>{
+  it('does not call the provider after the daily limit',async()=>{const fetcher=vi.fn(async()=>new Response(JSON.stringify({fields:{count:{integerValue:'20'}}})));await expect(reserveQuota({uid:'user',token:'token',projectId:'p',fetcher})).rejects.toMatchObject({status:429,code:'DAILY_LIMIT'});expect(fetcher).toHaveBeenCalledTimes(1)})
+  it('blocks requests inside the cooldown',async()=>{const now=new Date('2026-10-02T10:00:05Z');const fetcher=vi.fn(async()=>new Response(JSON.stringify({fields:{count:{integerValue:'1'},lastRequest:{timestampValue:'2026-10-02T10:00:00Z'}}})));await expect(reserveQuota({uid:'user',token:'token',projectId:'p',fetcher,now})).rejects.toMatchObject({code:'COOLDOWN'})})
+  it('uses an existence precondition and server timestamp for the first request',async()=>{const fetcher=vi.fn().mockResolvedValueOnce(new Response('',{status:404})).mockResolvedValueOnce(new Response('{}'));await reserveQuota({uid:'user',token:'token',projectId:'p',fetcher});const write=JSON.parse(fetcher.mock.calls[1][1].body).writes[0];expect(write.currentDocument).toEqual({exists:false});expect(write.updateTransforms[0].setToServerValue).toBe('REQUEST_TIME')})
+})

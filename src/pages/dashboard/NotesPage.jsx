@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from 'react'
+import { friendlyError } from '@/lib/errors'
+import { useMemo, useState } from 'react'
 import {
   FileText,
   Sparkles,
@@ -19,8 +20,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { useNotes } from '@/context/NotesContext'
-import { useToast } from '@/hooks/useToast'
+import { useNotes } from '@/context/NotesStore'
+import { useToast } from '@/hooks/ToastStore'
 import { formatTimeShort } from '@/lib/dates'
 import { EmptyState } from '@/components/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -44,27 +45,11 @@ export default function NotesPage() {
   const [explanation, setExplanation] = useState('')
   const [isExplaining, setIsExplaining] = useState(false)
 
-  const selectedNote = useMemo(() => notes.find((n) => n.id === selectedId) ?? null, [notes, selectedId])
+  const selectedNote = useMemo(() => notes.find((n) => n.id === selectedId) ?? notes[0] ?? null, [notes, selectedId])
 
-  useEffect(() => {
-    setExplanation('')
-    setExplainerTerm('')
-    setFlashcardFlipped(false)
-    setCurrentFlashcardIndex(0)
-    setQuizReveal({})
-    setQuizSelections({})
-  }, [selectedId])
-
-  useEffect(() => {
-    if (notes.length === 0) {
-      setSelectedId(null)
-      return
-    }
-    if (!selectedId || !notes.some((n) => n.id === selectedId)) {
-      setSelectedId(notes[0].id)
-    }
-  }, [notes, selectedId])
-
+  const selectNote = id => {
+    setSelectedId(id); setExplanation(''); setExplainerTerm(''); setFlashcardFlipped(false); setCurrentFlashcardIndex(0); setQuizReveal({}); setQuizSelections({})
+  }
   const filteredNotes = notes.filter(
     (note) =>
       note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -76,13 +61,9 @@ export default function NotesPage() {
     setIsGenerating(true)
     try {
       const result = await generateNoteIntel(selectedNote.id)
-      if (result?.isFallback) {
-        toast.warning('Gemini quota reached. Showing local fallback materials.')
-      } else {
-        toast.success('Generated AI study materials')
-      }
+      if (result) toast.success('Generated AI study materials')
     } catch (err) {
-      toast.error('Failed to generate study materials')
+      toast.error(friendlyError(err))
     } finally {
       setIsGenerating(false)
     }
@@ -95,12 +76,7 @@ export default function NotesPage() {
       const text = await explainConcept(explainerTerm, selectedNote.content)
       setExplanation(text)
     } catch (err) {
-      if (err.name === 'GeminiQuotaError') {
-        setExplanation(`Local fallback generated because Gemini quota was unavailable.\n\n"${explainerTerm}" is a key concept from your notes. Please review the relevant section in your notes for more details.`)
-        toast.warning('Gemini quota reached. Showing local fallback materials.')
-      } else {
-        toast.error('Failed to explain concept')
-      }
+      toast.error(friendlyError(err))
     } finally {
       setIsExplaining(false)
     }
@@ -132,18 +108,17 @@ export default function NotesPage() {
         subject: newNote.subject.trim() || 'General',
         content: newNote.content.trim(),
       })
-      setSelectedId(id)
+      selectNote(id)
       setNewNote({ title: '', subject: 'General', content: '' })
       setShowNewNote(false)
       toast.success('Note created')
-    } finally {
+    } catch (error) { toast.error(friendlyError(error)) } finally {
       setIsSaving(false)
     }
   }
 
   const deleteNoteLocal = async (noteId) => {
-    await deleteNote(noteId)
-    toast.success('Note deleted')
+    try { await deleteNote(noteId); toast.success('Note deleted'); selectNote(null) } catch (error) { toast.error(friendlyError(error)) }
   }
 
   const handleSelectOption = (qid, option) => {
@@ -222,7 +197,7 @@ export default function NotesPage() {
                   <button
                     type="button"
                     key={note.id}
-                    onClick={() => setSelectedId(note.id)}
+                    onClick={() => selectNote(note.id)}
                     className={cn(
                       'w-full text-left p-3 rounded-xl transition-smooth group',
                       selectedNote?.id === note.id
@@ -484,7 +459,8 @@ export default function NotesPage() {
                   </div>
                   <div className="flex gap-2">
                     <Input
-                      placeholder="Type a concept from your notes..."
+                      maxLength={300}
+                  placeholder="Type a concept from your notes..."
                       value={explainerTerm}
                       onChange={(e) => setExplainerTerm(e.target.value)}
                       className="bg-background/50 border-border flex-1"
@@ -563,7 +539,8 @@ export default function NotesPage() {
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">Title</label>
                   <Input
-                    placeholder="Note title"
+                    maxLength={200}
+                  placeholder="Note title"
                     value={newNote.title}
                     onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
                     className="bg-secondary/50 border-border"
@@ -572,6 +549,7 @@ export default function NotesPage() {
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">Subject</label>
                   <Input
+                    maxLength={100}
                     value={newNote.subject}
                     onChange={(e) => setNewNote({ ...newNote, subject: e.target.value })}
                     className="bg-secondary/50 border-border"
@@ -582,7 +560,8 @@ export default function NotesPage() {
                 <label className="block text-sm font-medium text-foreground mb-2">Content</label>
                 <textarea
                   placeholder="Paste or type your notes…"
-                  value={newNote.content}
+                  maxLength={30000}
+                    value={newNote.content}
                   onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-foreground placeholder:text-muted-foreground focus:border-primary outline-none resize-none h-64"
                 />

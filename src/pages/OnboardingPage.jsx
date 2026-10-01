@@ -1,14 +1,15 @@
 import { useState } from 'react'
+import { friendlyError } from '@/lib/errors'
 import { useNavigate, Link, Navigate } from 'react-router-dom'
 import { Sparkles, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useAuth } from '@/context/AuthContext'
-import { useToast } from '@/hooks/useToast'
+import { useAuth } from '@/context/AuthStore'
+import { useToast } from '@/hooks/ToastStore'
 
 export default function OnboardingPage() {
   const navigate = useNavigate()
-  const { profile, completeOnboarding } = useAuth()
+  const { profile, completeOnboarding, error } = useAuth()
   const toast = useToast()
   const [name, setName] = useState(profile?.name || '')
   const [college, setCollege] = useState(profile?.college || '')
@@ -27,15 +28,16 @@ export default function OnboardingPage() {
     }
     
     setIsSubmitting(true)
+    try {
     await completeOnboarding({
       name: name.trim(),
       college: college.trim(),
       semesterYear: semesterYear.trim(),
       studyGoal: studyGoal.trim(),
     })
-    setIsSubmitting(false)
     toast.success('Profile setup complete!')
     navigate('/dashboard', { replace: true })
+    } catch (cause) { toast.error(friendlyError(cause)) } finally { setIsSubmitting(false) }
   }
 
   return (
@@ -50,10 +52,11 @@ export default function OnboardingPage() {
           </Link>
           <h1 className="text-2xl font-bold text-foreground mb-2">Set up your profile</h1>
           <p className="text-muted-foreground text-sm">
-            Saved only in this browser (localStorage). You can edit this later in Settings.
+            Your profile syncs privately across your devices. You can edit it later in Settings.
           </p>
         </div>
 
+        {error && <div role="alert" className="mb-4 rounded-xl border border-destructive p-4 text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-8 space-y-4">
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">Name *</label>

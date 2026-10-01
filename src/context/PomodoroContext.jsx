@@ -1,108 +1,24 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { collection, doc, getDocs, getDoc, setDoc } from 'firebase/firestore'
+import { useEffect, useState } from 'react'
+import { PomodoroContext } from './PomodoroStore'
+import { useUserCollection } from '@/hooks/useUserCollection'
+import { onSnapshot, doc, setDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
-import { useAuth } from './AuthContext'
-
-const PomodoroContext = createContext(null)
-
+import { useAuth } from './AuthStore'
+import { withTimeout, friendlyError } from '@/lib/errors'
+const defaults = { focus: 25, shortBreak: 5, longBreak: 15, sessionsBeforeLongBreak: 4 }
 export function PomodoroProvider({ children }) {
+  const store = useUserCollection('sessions', 'completedAt')
   const { userId } = useAuth()
-  const [pomodoroSessions, setPomodoroSessions] = useState([])
-  const [pomodoroSettings, setPomodoroSettingsState] = useState({
-    focus: 25,
-    shortBreak: 5,
-    longBreak: 15,
-    sessionsBeforeLongBreak: 4,
-  })
-  const [isLoading, setIsLoading] = useState(true)
-
+  const [settings, setSettings] = useState({ uid: null, value: defaults, loading: true, error: '' })
   useEffect(() => {
-    let mounted = true
-    async function loadPomodoro() {
-      if (!userId) {
-        if (mounted) {
-          setPomodoroSessions([])
-          setIsLoading(false)
-        }
-        return
-      }
-      setIsLoading(true)
-      try {
-        const sessionsRef = collection(db, 'users', userId, 'sessions')
-        const settingsRef = doc(db, 'users', userId, 'pomodoroSettings', 'default')
-        
-        const [sessionsSnap, settingsSnap] = await Promise.all([
-          getDocs(sessionsRef),
-          getDoc(settingsRef)
-        ])
-        
-        const sessions = sessionsSnap.docs.map(d => d.data())
-        sessions.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
-        
-        const defaultSettings = {
-          focus: 25,
-          shortBreak: 5,
-          longBreak: 15,
-          sessionsBeforeLongBreak: 4,
-        }
-        
-        let settings = { ...defaultSettings }
-        if (settingsSnap.exists()) {
-          const data = settingsSnap.data()
-          settings = {
-            focus: Math.max(1, Number(data.focus) || defaultSettings.focus),
-            shortBreak: Math.max(1, Number(data.shortBreak) || defaultSettings.shortBreak),
-            longBreak: Math.max(1, Number(data.longBreak) || defaultSettings.longBreak),
-            sessionsBeforeLongBreak: Math.max(1, Number(data.sessionsBeforeLongBreak) || defaultSettings.sessionsBeforeLongBreak),
-          }
-        }
-
-        if (mounted) {
-          setPomodoroSessions(sessions)
-          setPomodoroSettingsState(settings)
-        }
-      } catch (err) {
-        console.error('Failed to load pomodoro data', err)
-      } finally {
-        if (mounted) setIsLoading(false)
-      }
-    }
-    loadPomodoro()
-    return () => { mounted = false }
-  }, [userId])
-
-  const recordFocusSessionComplete = useCallback(async (focusMinutes) => {
     if (!userId) return
-    const newDocRef = doc(collection(db, 'users', userId, 'sessions'))
-    const row = {
-      id: newDocRef.id,
-      completedAt: new Date().toISOString(),
-      focusMinutes: Math.max(1, focusMinutes),
-    }
-    setPomodoroSessions((prev) => [row, ...prev])
-    await setDoc(newDocRef, row)
+    const timer = setTimeout(() => setSettings({ uid: userId, value: defaults, loading: false, error: 'Focus settings sync is taking too long. Check your connection.' }), 12000)
+    const stop = onSnapshot(doc(db, 'users', userId, 'pomodoroSettings', 'default'), snap => {
+      clearTimeout(timer); setSettings({ uid: userId, value: { ...defaults, ...(snap.exists() ? snap.data() : {}) }, loading: false, error: '' })
+    }, error => { clearTimeout(timer); setSettings({ uid: userId, value: defaults, loading: false, error: friendlyError(error) }) })
+    return () => { clearTimeout(timer); stop() }
   }, [userId])
-
-  const setPomodoroSettings = useCallback(async (next) => {
-    if (!userId) return
-    setPomodoroSettingsState(next)
-    const settingsRef = doc(db, 'users', userId, 'pomodoroSettings', 'default')
-    await setDoc(settingsRef, next, { merge: true })
-  }, [userId])
-
-  const value = {
-    pomodoroSessions,
-    pomodoroSettings,
-    isLoading,
-    recordFocusSessionComplete,
-    setPomodoroSettings,
-  }
-
-  return <PomodoroContext.Provider value={value}>{children}</PomodoroContext.Provider>
-}
-
-export function usePomodoro() {
-  const ctx = useContext(PomodoroContext)
-  if (!ctx) throw new Error('usePomodoro must be used inside PomodoroProvider')
-  return ctx
+  const setPomodoroSettings = next => withTimeout(setDoc(doc(db, 'users', userId, 'pomodoroSettings', 'default'), next))
+  const recordFocusSessionComplete = focusMinutes => store.add({ completedAt: new Date().toISOString(), focusMinutes: Math.min(120, Math.max(1, focusMinutes)) })
+  return <PomodoroContext.Provider value={{ pomodoroSessions: store.rows, pomodoroSettings: settings.uid === userId ? settings.value : defaults, isLoading: store.isLoading || (Boolean(userId) && (settings.uid !== userId || settings.loading)), error: store.error || (settings.uid === userId ? settings.error : ''), setPomodoroSettings, recordFocusSessionComplete }}>{children}</PomodoroContext.Provider>
 }

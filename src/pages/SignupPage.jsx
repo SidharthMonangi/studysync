@@ -1,20 +1,20 @@
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useState } from 'react'
+import { friendlyError } from '@/lib/errors'
 import { Sparkles, Eye, EyeOff, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useAuth } from '@/context/AuthContext'
-import { useToast } from '@/hooks/useToast'
+import { useAuth } from '@/context/AuthStore'
+import { useToast } from '@/hooks/ToastStore'
 
 const benefits = [
   'Tasks with deadlines, subjects, and priorities',
-  'Manual study planner with “today” view',
+  'A daily plan for your coursework',
   'Pomodoro timer with history synced to cloud',
-  'Notes with local summary + quiz (no cloud AI)',
+  'AI summaries, quizzes, flashcards, and explanations',
 ]
 
 export default function SignupPage() {
-  const navigate = useNavigate()
   const { session, profile, signup } = useAuth()
   const toast = useToast()
   const [showPassword, setShowPassword] = useState(false)
@@ -40,13 +40,14 @@ export default function SignupPage() {
       return
     }
 
+    setIsLoading(true)
     try {
       await signup({ name, email, password })
       toast.success('Account created successfully!')
       // Redirection is handled by the session check at the top of the component
     } catch (err) {
-      setError(err.message || 'Could not create account.')
-      toast.error(err.message || 'Could not create account')
+      setError(friendlyError(err) || 'Could not create account.')
+      toast.error(friendlyError(err) || 'Could not create account')
     } finally {
       setIsLoading(false)
     }
@@ -67,7 +68,7 @@ export default function SignupPage() {
             Your workspace, <span className="gradient-text">synced securely</span>
           </h2>
           <p className="text-muted-foreground mb-8">
-            Create an account stored securely in Firebase—ideal for a full-stack portfolio demo.
+            Bring your coursework together, build your focus routine, and study with a clear plan.
           </p>
 
           <ul className="space-y-4">
@@ -83,8 +84,7 @@ export default function SignupPage() {
 
           <div className="mt-12 glass-card rounded-xl p-4">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              <span className="text-foreground font-medium">Resume tip:</span> call out Firebase Authentication, Firestore subcollections,
-              and real-time optimistic UI updates—real full-stack architecture.
+              <span className="text-foreground font-medium">Your private workspace.</span> Notes and progress sync across devices, so you can keep learning wherever you are.
             </p>
           </div>
         </div>
@@ -103,7 +103,7 @@ export default function SignupPage() {
 
           <div className="text-center lg:text-left mb-8">
             <h1 className="text-2xl font-bold text-foreground mb-2">Create your account</h1>
-            <p className="text-muted-foreground">Data is synced securely via Firebase Firestore.</p>
+            <p className="text-muted-foreground">Keep your notes, plans, and progress together.</p>
           </div>
 
           <div className="glass-card rounded-2xl p-8">
@@ -119,6 +119,7 @@ export default function SignupPage() {
                 </label>
                 <Input
                   id="name"
+                  maxLength={100}
                   type="text"
                   placeholder="John Doe"
                   value={name}
@@ -160,7 +161,8 @@ export default function SignupPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-smooth"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -177,7 +179,7 @@ export default function SignupPage() {
                   required
                 />
                 <label htmlFor="terms" className="text-sm text-muted-foreground">
-                  I understand this is a portfolio demo powered by Firebase.
+                  I understand AI study materials should be checked against my course sources.
                 </label>
               </div>
 

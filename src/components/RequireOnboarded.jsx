@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/context/AuthStore'
 import { Loader2 } from 'lucide-react'
 
 /** After onboarding questionnaire is complete. */
